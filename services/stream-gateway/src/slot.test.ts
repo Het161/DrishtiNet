@@ -14,6 +14,11 @@ import {
   virtualNowOffsetMs,
   isTimeShifted,
   now,
+  fitDriftModel,
+  slotTimeMs,
+  GLOBAL_DRIFT_RATE,
+  MIN_ANCHOR_SPAN_SECONDS,
+  type TimeSyncAnchor,
 } from './slot.js';
 
 /**
@@ -237,5 +242,114 @@ describe('VIRTUAL_NOW_IST', () => {
   it('refuses an unparseable value rather than silently ignoring it', () => {
     expect(() => virtualNowOffsetMs({ VIRTUAL_NOW_IST: 'tomorrow morning' } as NodeJS.ProcessEnv))
       .toThrow(/not a parseable timestamp/);
+  });
+});
+
+describe('per-camera drift model', () => {
+  /** Camera 10's three real burned-in readings from Phase 0. */
+  const CAM10: TimeSyncAnchor[] = [
+    { positionSeconds: 0, observedOffsetSeconds: -1 },
+    { positionSeconds: 10800, observedOffsetSeconds: 53 },
+    { positionSeconds: 21600, observedOffsetSeconds: 110 },
+  ];
+
+  it('fits camera 10 to its measured ~0.51% drift', () => {
+    const m = fitDriftModel(CAM10);
+    expect(m.source).toBe('fitted');
+    expect(m.driftRate).toBeCloseTo(0.005139, 5);
+    expect(m.maxResidualSeconds!).toBeLessThan(2);
+  });
+
+  it('reproduces the observed clock readings within the +/-5s target', () => {
+    const m = fitDriftModel(CAM10);
+    const observed: [number, string][] = [
+      [0, '2026-06-13T20:59:59+05:30'],
+      [10800, '2026-06-14T00:00:53+05:30'],
+      [21600, '2026-06-14T03:01:50+05:30'],
+    ];
+    for (const [position, iso] of observed) {
+      const error = Math.abs(Date.parse(iso) - recordedAtMs(position, m)) / 1000;
+      expect(error).toBeLessThan(5);
+    }
+  });
+
+  it('refuses to fit a slope from anchors that do not span far enough', () => {
+    // Two readings inside one 45-minute clip: a +/-1s misreading would become ~32s by slot end.
+    const narrow: TimeSyncAnchor[] = [
+      { positionSeconds: 36000, observedOffsetSeconds: 185 },
+      { positionSeconds: 38700, observedOffsetSeconds: 199 },
+    ];
+    const m = fitDriftModel(narrow);
+    expect(m.source).toBe('global_default');
+    expect(m.driftRate).toBe(GLOBAL_DRIFT_RATE);
+    expect(m.spanSeconds).toBe(2700);
+  });
+
+  it('accepts a pair that straddles the slot', () => {
+    const wide: TimeSyncAnchor[] = [
+      { positionSeconds: 3600, observedOffsetSeconds: 17.5 },
+      { positionSeconds: 36000, observedOffsetSeconds: 183.5 },
+    ];
+    const m = fitDriftModel(wide);
+    expect(m.source).toBe('fitted');
+    expect(m.spanSeconds).toBeGreaterThanOrEqual(MIN_ANCHOR_SPAN_SECONDS);
+    expect(m.driftRate).toBeCloseTo(0.005123, 4);
+  });
+
+  it('shows why the span rule exists: a 1s misreading over a short span explodes by slot end', () => {
+    const truth = (p: number) => -1.5 + 0.005139 * p;
+    const misread = (anchors: TimeSyncAnchor[]) =>
+      anchors.map((a, i) => ({ ...a, observedOffsetSeconds: a.observedOffsetSeconds + (i ? 1 : -1) }));
+
+    const narrowSpan = [3600, 6300].map((p) => ({ positionSeconds: p, observedOffsetSeconds: truth(p) }));
+    const wideSpan = [3600, 36000].map((p) => ({ positionSeconds: p, observedOffsetSeconds: truth(p) }));
+
+    // Force a raw fit on the narrow pair to show what the guard is protecting against.
+    const rawNarrow = (() => {
+      const a = misread(narrowSpan);
+      const b = (a[1]!.observedOffsetSeconds - a[0]!.observedOffsetSeconds)
+        / (a[1]!.positionSeconds - a[0]!.positionSeconds);
+      const c = a[0]!.observedOffsetSeconds - b * a[0]!.positionSeconds;
+      return c + b * 43200;
+    })();
+
+    const wideModel = fitDriftModel(misread(wideSpan));
+    const wideErr = Math.abs(
+      (wideModel.offsetSeconds + wideModel.driftRate * 43200) - truth(43200),
+    );
+
+    expect(Math.abs(rawNarrow - truth(43200))).toBeGreaterThan(15);
+    expect(wideErr).toBeLessThan(5);
+  });
+
+  it('falls back to a borrowed rate for a single anchor, and says so', () => {
+    const m = fitDriftModel([{ positionSeconds: 1305, observedOffsetSeconds: 9 }]);
+    expect(m.source).toBe('single_anchor');
+    expect(m.driftRate).toBe(GLOBAL_DRIFT_RATE);
+    // The constant term is chosen so the model passes exactly through the one reading we have.
+    expect(recordedAtMs(1305, m)).toBeCloseTo(recordedAtMs(1305, 9), -1);
+  });
+
+  it('reports no model at all rather than pretending zero drift is measured', () => {
+    const m = fitDriftModel([]);
+    expect(m.source).toBe('none');
+    expect(m.anchorCount).toBe(0);
+  });
+});
+
+describe('slotTimeMs', () => {
+  it('is the portal linear clock, uncorrected', () => {
+    expect(slotTimeMs(0)).toBe(RECORDING_EPOCH_MS);
+    expect(slotTimeMs(36000)).toBe(RECORDING_EPOCH_MS + 36_000_000);
+  });
+
+  it('differs from recorded_at by exactly the drift correction', () => {
+    const m = fitDriftModel([
+      { positionSeconds: 0, observedOffsetSeconds: -1 },
+      { positionSeconds: 21600, observedOffsetSeconds: 110 },
+    ]);
+    const p = 36000;
+    const delta = (recordedAtMs(p, m) - slotTimeMs(p)) / 1000;
+    expect(delta).toBeCloseTo(m.offsetSeconds + m.driftRate * p, 6);
   });
 });

@@ -162,17 +162,150 @@ export function isTimeShifted(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env.VIRTUAL_NOW_IST?.trim());
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Per-camera clock drift                                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One reading of a camera's burned-in overlay clock at a known file position.
+ * `observedOffsetSeconds` is (clock shown) − (recording epoch + position): how far the footage's
+ * own clock runs ahead of elapsed file time at that point.
+ */
+export interface TimeSyncAnchor {
+  positionSeconds: number;
+  observedOffsetSeconds: number;
+}
+
+export type DriftSource = 'fitted' | 'single_anchor' | 'global_default' | 'none';
+
+export interface DriftModel {
+  /** Constant term, seconds. */
+  offsetSeconds: number;
+  /** Slope: seconds of clock error per second of file position. */
+  driftRate: number;
+  source: DriftSource;
+  anchorCount: number;
+  /** Position span the anchors cover. Too small a span cannot constrain the slope. */
+  spanSeconds: number;
+  /** Worst residual of the fit against its own anchors, or null when not fitted. */
+  maxResidualSeconds: number | null;
+}
+
+/**
+ * Minimum anchor span needed to fit a drift rate.
+ *
+ * A pair of anchors close together cannot constrain a slope: with span S and a reading error of
+ * e seconds on each, the slope is uncertain by about 2e/S, which by the end of a 43,200 s slot
+ * becomes 43200·2e/S seconds of error. At S = 2,700 (two readings inside one 45-minute clip) a
+ * ±1 s misreading becomes ±32 s — worse than assuming no drift at all. At S = 20,000 the same
+ * error stays near ±4 s, inside our ±5 s target.
+ *
+ * So anchors must straddle the slot: one from the daylight window (p ≈ 36,000) and one from a
+ * single frame near p ≈ 3,600.
+ */
+export const MIN_ANCHOR_SPAN_SECONDS = 20_000;
+
+/**
+ * Fallback drift rate, measured on camera 10 from three burned-in readings
+ * (p=0 → −1 s, p=10,800 → +53 s, p=21,600 → +110 s): +0.5139 %, worst residual 1.0 s.
+ * Better than assuming zero for a camera we have not yet anchored, but clearly labelled as a
+ * borrowed constant rather than a measurement of that camera.
+ */
+export const GLOBAL_DRIFT_RATE = 0.005139;
+
+/**
+ * Fit `offset(p) = a + b·p` by least squares.
+ *
+ * Refuses to fit a slope from anchors that do not span far enough, falling back to a constant
+ * offset plus the global rate. Reporting a confident model from insufficient data is exactly the
+ * kind of false precision that produces a route which looks right and is wrong.
+ */
+export function fitDriftModel(anchors: readonly TimeSyncAnchor[]): DriftModel {
+  if (anchors.length === 0) {
+    return {
+      offsetSeconds: 0, driftRate: 0, source: 'none',
+      anchorCount: 0, spanSeconds: 0, maxResidualSeconds: null,
+    };
+  }
+
+  const positions = anchors.map((a) => a.positionSeconds);
+  const span = Math.max(...positions) - Math.min(...positions);
+
+  if (anchors.length === 1 || span < MIN_ANCHOR_SPAN_SECONDS) {
+    // Anchor the constant term at the reading we have, and borrow the global slope.
+    const a0 = anchors[0]!;
+    const offset = a0.observedOffsetSeconds - GLOBAL_DRIFT_RATE * a0.positionSeconds;
+    return {
+      offsetSeconds: offset,
+      driftRate: GLOBAL_DRIFT_RATE,
+      source: anchors.length === 1 ? 'single_anchor' : 'global_default',
+      anchorCount: anchors.length,
+      spanSeconds: span,
+      maxResidualSeconds: null,
+    };
+  }
+
+  const n = anchors.length;
+  const sx = positions.reduce((t, x) => t + x, 0);
+  const sy = anchors.reduce((t, a) => t + a.observedOffsetSeconds, 0);
+  const sxx = positions.reduce((t, x) => t + x * x, 0);
+  const sxy = anchors.reduce((t, a) => t + a.positionSeconds * a.observedOffsetSeconds, 0);
+
+  const denom = n * sxx - sx * sx;
+  if (denom === 0) {
+    const a0 = anchors[0]!;
+    return {
+      offsetSeconds: a0.observedOffsetSeconds - GLOBAL_DRIFT_RATE * a0.positionSeconds,
+      driftRate: GLOBAL_DRIFT_RATE, source: 'global_default',
+      anchorCount: n, spanSeconds: span, maxResidualSeconds: null,
+    };
+  }
+
+  const b = (n * sxy - sx * sy) / denom;
+  const a = (sy - b * sx) / n;
+  const maxResidual = Math.max(
+    ...anchors.map((an) => Math.abs(an.observedOffsetSeconds - (a + b * an.positionSeconds))),
+  );
+
+  return {
+    offsetSeconds: a, driftRate: b, source: 'fitted',
+    anchorCount: n, spanSeconds: span, maxResidualSeconds: maxResidual,
+  };
+}
+
+/**
+ * `slot_time` — the portal's own linear clock: recording epoch + file position, no correction.
+ *
+ * Stored alongside `recorded_at` on every event. Keeping both means a later re-anchoring can
+ * recompute recorded_at without re-reading the footage, and any disagreement between the two is
+ * visible rather than baked in.
+ */
+export function slotTimeMs(positionSeconds: number): number {
+  return RECORDING_EPOCH_MS + positionSeconds * 1000;
+}
+
 /**
  * `recorded_at` — the forensic timestamp an operator sees and the only time used for cross-camera
  * correlation.
  *
- * recorded_at = recording epoch + position in file + this camera's measured clock offset
+ *   recorded_at = recording epoch + position + (a + b·position)
+ *
+ * where (a, b) is this camera's drift model. Passing a bare number keeps the old constant-offset
+ * behaviour, which is what a camera with a single anchor gets.
  *
  * Never derive this from raw container PTS: PTS restarts every time the file loops, so a route
  * built on it would silently run backwards.
  */
-export function recordedAtMs(positionSeconds: number, clockOffsetSeconds = 0): number {
-  return RECORDING_EPOCH_MS + (positionSeconds + clockOffsetSeconds) * 1000;
+export function recordedAtMs(
+  positionSeconds: number,
+  correction: number | DriftModel = 0,
+): number {
+  const offset =
+    typeof correction === 'number'
+      ? correction
+      : correction.offsetSeconds + correction.driftRate * positionSeconds;
+  return RECORDING_EPOCH_MS + (positionSeconds + offset) * 1000;
 }
 
 /**
