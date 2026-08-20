@@ -2,6 +2,7 @@ import { Clock, Radio } from 'lucide-react';
 
 import { RegistryShell } from '@/components/RegistryShell';
 import { getRegistry } from '@/lib/registry';
+import { hasPmtilesArchives } from '@/lib/basemap';
 import { getTimeContext } from '@/lib/time-shift';
 import { translator } from '@/lib/i18n';
 
@@ -9,7 +10,8 @@ import { translator } from '@/lib/i18n';
 export const dynamic = 'force-dynamic';
 
 export default async function RegistryPage() {
-  const [data, time] = await Promise.all([getRegistry(), Promise.resolve(getTimeContext())]);
+  const [data, pmtiles] = await Promise.all([getRegistry(), hasPmtilesArchives()]);
+  const time = getTimeContext();
   const tr = translator('en');
 
   return (
@@ -41,7 +43,7 @@ export default async function RegistryPage() {
       </header>
 
       <div className="min-h-0 flex-1">
-        <RegistryShell data={data} />
+        <RegistryShell data={data} hasPmtiles={pmtiles} />
       </div>
     </main>
   );

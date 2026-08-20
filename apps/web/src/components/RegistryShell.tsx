@@ -63,9 +63,11 @@ function Stat({
 
 export function RegistryShell({
   data,
+  hasPmtiles = false,
   locale = 'en',
 }: {
   data: RegistryData;
+  hasPmtiles?: boolean;
   locale?: Locale;
 }) {
   const tr = translator(locale);
@@ -125,7 +127,12 @@ export function RegistryShell({
       {/* Asymmetric split: map dominates, detail rail beside it */}
       <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(380px,1fr)]">
         <section className="panel relative min-h-[420px] overflow-hidden">
-          <RegistryMap cameras={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+          <RegistryMap
+            cameras={filtered}
+            hasPmtiles={hasPmtiles}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+          />
 
           {/* Legend — states what a hollow marker means, because that is the whole honesty story */}
           <div className="pointer-events-none absolute bottom-3 left-3 rounded-lg border border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-base)_88%,transparent)] px-3 py-2 text-[11px] leading-relaxed">

@@ -72,9 +72,17 @@ e2e: ## Run Playwright end-to-end tests (needs the web app running)
 web: ## Build and serve the web app against the local database
 	cd apps/web && pnpm build && pnpm start
 
+.PHONY: doctor
+doctor: ## Preflight: toolchain, services, disk, offline assets
+	@./scripts/doctor.sh
+
 .PHONY: basemap
-basemap: ## Rebuild the offline Gujarat basemap (needs internet; output is committed)
-	python3 scripts/build_basemap.py
+basemap: ## Rebuild district boundaries + centroids from DataMeet (needs internet; output committed)
+	$(PY) scripts/build_basemap.py
+
+.PHONY: pmtiles
+pmtiles: ## Build the offline roads/labels PMTiles archives (needs internet; output committed)
+	./scripts/build_pmtiles.sh
 
 .PHONY: check
 check: typecheck test ## Typecheck + test (run before every commit)

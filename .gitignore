@@ -54,6 +54,7 @@ models/
 .venv/
 
 # Copied from node_modules by apps/web/scripts/copy-maplibre-worker.mjs on every build.
-# The offline basemap next to it (public/map/) IS committed — it is generated once, online.
+# The offline basemap next to it (public/map/) IS committed — GeoJSON and PMTiles alike, because
+# the venue has no network and rebuilding them needs one.
 apps/web/public/maplibre/
 apps/web/.screenshots/

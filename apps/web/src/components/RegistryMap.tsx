@@ -20,9 +20,13 @@
  *     ask whether a red dot means "broken camera" or "urgent alert".
  */
 import { useEffect, useRef, useState } from 'react';
-import type { Map as MapLibreMap, StyleSpecification, GeoJSONSource } from 'maplibre-gl';
+import type { Map as MapLibreMap, GeoJSONSource } from 'maplibre-gl';
 import maplibregl from 'maplibre-gl/dist/maplibre-gl-csp';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { Protocol } from 'pmtiles';
+
+import type { RegistryCamera } from '@/lib/registry';
+import { buildBasemapStyle } from '@/lib/map-style';
 
 /**
  * The default MapLibre bundle builds its web worker from an inlined Blob, and that worker never
@@ -33,7 +37,17 @@ import 'maplibre-gl/dist/maplibre-gl.css';
  */
 maplibregl.setWorkerUrl('/maplibre/maplibre-gl-csp-worker.js');
 
-import type { RegistryCamera } from '@/lib/registry';
+/**
+ * Register the pmtiles:// protocol once per page, not per map instance — MapLibre keeps protocol
+ * handlers in a module-level registry and re-adding one on every mount leaks handlers.
+ */
+let pmtilesRegistered = false;
+function registerPmtiles(): void {
+  if (pmtilesRegistered) return;
+  const protocol = new Protocol();
+  maplibregl.addProtocol('pmtiles', protocol.tile);
+  pmtilesRegistered = true;
+}
 
 /** Read from the CSS tokens so the map can never drift from the design system. */
 function token(name: string, fallback: string): string {
@@ -44,6 +58,8 @@ function token(name: string, fallback: string): string {
 
 export interface RegistryMapProps {
   cameras: RegistryCamera[];
+  /** Whether the PMTiles road archives exist. Checked server-side; false degrades gracefully. */
+  hasPmtiles?: boolean;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /** Initial viewport. Defaults to the Junagadh demo cluster, per CLAUDE.md. */
@@ -55,6 +71,7 @@ const JUNAGADH: [number, number] = [70.4595, 21.5225];
 
 export function RegistryMap({
   cameras,
+  hasPmtiles = false,
   selectedId,
   onSelect,
   initialCenter = JUNAGADH,
@@ -74,29 +91,21 @@ export function RegistryMap({
     const border = token('--color-border', '#232c3d');
     const muted = token('--color-muted', '#8a93a6');
 
-    const style: StyleSpecification = {
-      version: 8,
-      // No glyph or sprite URL: every label is drawn from GeoJSON with no remote font fetch, which
-      // is what keeps this working with the network unplugged.
-      sources: {
-        districts: { type: 'geojson', data: '/map/gujarat-districts.geojson' },
+    registerPmtiles();
+
+    const style = buildBasemapStyle({
+      palette: {
+        base,
+        surface,
+        elevated: token('--color-elevated', '#1b2230'),
+        border,
+        text: token('--color-text', '#e6eaf2'),
+        muted,
       },
-      layers: [
-        { id: 'bg', type: 'background', paint: { 'background-color': base } },
-        {
-          id: 'district-fill',
-          type: 'fill',
-          source: 'districts',
-          paint: { 'fill-color': surface, 'fill-opacity': 0.55 },
-        },
-        {
-          id: 'district-line',
-          type: 'line',
-          source: 'districts',
-          paint: { 'line-color': border, 'line-width': 1 },
-        },
-      ],
-    };
+      // Set by the server component from whether the archives are actually on disk, so a missing
+      // basemap degrades to district outlines rather than rendering an empty rectangle.
+      pmtiles: hasPmtiles,
+    });
 
     let instance: MapLibreMap;
     try {
@@ -119,7 +128,11 @@ export function RegistryMap({
     instance.addControl(
       new maplibregl.AttributionControl({
         compact: true,
-        customAttribution: 'Boundaries: GADM via geohacker/india · offline basemap',
+        // Roads/labels carry their own attribution from the PMTiles metadata; this covers the
+        // district boundaries, which come from a separately-licensed source. Both must appear:
+        // CC BY 4.0 and ODbL each require attribution, and this is a government submission.
+        customAttribution:
+          'Districts © <a href="https://github.com/datameet/maps">DataMeet</a> (CC BY 4.0)',
       }),
       'bottom-right',
     );

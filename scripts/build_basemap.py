@@ -11,7 +11,13 @@ GeoJSON sources.
 Run once, ONLINE, to produce apps/web/public/map/gujarat-districts.geojson. That output is
 committed so the demo machine never needs the network.
 
-Source: geohacker/india district boundaries (GADM-derived).
+Source: DataMeet Census 2011 district boundaries, CC BY 4.0.
+
+Deliberately NOT GADM (which the geohacker/india GeoJSON derives from): GADM's terms permit
+academic and non-commercial use only and forbid redistribution without permission. Shipping it
+inside a submission to a state police force — which may become a product — would be a licensing
+problem hiding in a data file. DataMeet is CC BY 4.0: redistributable with attribution, which the
+map carries.
 
 Usage:
     python3 scripts/build_basemap.py                       # downloads if needed, then builds
@@ -28,7 +34,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".cache" / "geo"
-SOURCE_URL = "https://raw.githubusercontent.com/geohacker/india/master/district/india_district.geojson"
+SOURCE_BASE = "https://raw.githubusercontent.com/datameet/maps/master/Districts/Census_2011/2011_Dist"
+SOURCE_EXTS = ("shp", "shx", "dbf", "prj")
+SOURCE_ATTRIBUTION = (
+    "District boundaries by DataMeet India community (CC BY 4.0) — "
+    "https://github.com/datameet/maps"
+)
 OUT_PATH = ROOT / "apps" / "web" / "public" / "map" / "gujarat-districts.geojson"
 
 STATE_NAME = "Gujarat"
@@ -42,15 +53,52 @@ COORD_PRECISION = 4
 SIMPLIFY_TOLERANCE = 0.001
 
 
-def download(dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    print(f"downloading district boundaries -> {dest}")
-    out = subprocess.run(
-        ["curl", "-sSL", "--fail", "--max-time", "300", "-o", str(dest), SOURCE_URL],
-        capture_output=True, text=True,
-    )
-    if out.returncode != 0:
-        sys.exit(f"download failed: {out.stderr[:200]}")
+def download(base: Path) -> None:
+    """Fetch the DataMeet shapefile set. A shapefile is several files; all are required."""
+    base.parent.mkdir(parents=True, exist_ok=True)
+    print(f"downloading DataMeet district boundaries -> {base}.*")
+    for ext in SOURCE_EXTS:
+        out = subprocess.run(
+            ["curl", "-sSL", "--fail", "--max-time", "300",
+             "-o", f"{base}.{ext}", f"{SOURCE_BASE}.{ext}"],
+            capture_output=True, text=True,
+        )
+        if out.returncode != 0:
+            sys.exit(f"download of .{ext} failed: {out.stderr[:200]}")
+
+
+def read_districts(base: Path, state: str) -> list[dict]:
+    """
+    Read the shapefile into GeoJSON-shaped features, filtered to one state.
+
+    pyshp rather than ogr2ogr/GDAL: it is pure Python and installs into the repo's own venv, so
+    nothing lands on the system. Shapefile rings are already closed and in lon/lat (the .prj is
+    WGS84), which is what MapLibre wants.
+    """
+    try:
+        import shapefile  # pyshp
+    except ImportError:
+        sys.exit("pyshp missing — run: .venv/bin/pip install pyshp")
+
+    reader = shapefile.Reader(str(base))
+    fields = [f[0] for f in reader.fields[1:]]
+    out = []
+    for sr in reader.shapeRecords():
+        rec = dict(zip(fields, sr.record))
+        if str(rec.get("ST_NM", "")).strip().lower() != state.lower():
+            continue
+        geo = sr.shape.__geo_interface__
+        if geo["type"] not in ("Polygon", "MultiPolygon"):
+            continue
+        out.append({
+            "properties": {
+                "district": str(rec.get("DISTRICT", "")).strip(),
+                "state": str(rec.get("ST_NM", "")).strip(),
+                "censuscode": rec.get("censuscode"),
+            },
+            "geometry": geo,
+        })
+    return out
 
 
 def perpendicular_distance(pt, start, end) -> float:
@@ -257,23 +305,23 @@ def write_district_centroids(features: list, out_path: Path) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--input", type=Path, default=CACHE / "india_district.geojson")
+    ap.add_argument("--input", type=Path, default=CACHE / "datameet" / "2011_Dist.shp")
     ap.add_argument("--out", type=Path, default=OUT_PATH)
     ap.add_argument("--state", default=STATE_NAME)
     args = ap.parse_args()
 
-    if not args.input.exists():
-        download(args.input)
+    shp_base = args.input.with_suffix("")
+    if not Path(f"{shp_base}.shp").exists():
+        download(shp_base)
 
-    print(f"reading {args.input} ({args.input.stat().st_size / 1e6:.1f} MB)")
-    data = json.loads(args.input.read_text())
+    print(f"reading {shp_base}.shp")
+    features = read_districts(shp_base, args.state)
+    print(f"  {len(features)} districts in {args.state}")
 
     source_points = 0
     out_features = []
-    for feature in data["features"]:
-        props = feature.get("properties", {})
-        if props.get("NAME_1") != args.state:
-            continue
+    for feature in features:
+        props = feature["properties"]
         geom = feature.get("geometry")
         if not geom:
             continue
@@ -284,9 +332,9 @@ def main() -> int:
         out_features.append({
             "type": "Feature",
             "properties": {
-                "district": props.get("NAME_2"),
-                "state": props.get("NAME_1"),
-                "type": props.get("ENGTYPE_2"),
+                "district": props.get("district"),
+                "state": props.get("state"),
+                "censuscode": props.get("censuscode"),
             },
             "geometry": simplified,
         })
@@ -302,8 +350,9 @@ def main() -> int:
         "metadata": {
             "state": args.state,
             "districts": len(out_features),
-            "source": SOURCE_URL,
-            "licence": "GADM-derived via geohacker/india",
+            "source": f"{SOURCE_BASE}.shp",
+            "licence": "CC BY 4.0",
+            "attribution": SOURCE_ATTRIBUTION,
             "simplify_tolerance_deg": SIMPLIFY_TOLERANCE,
             "coordinate_precision": COORD_PRECISION,
             "note": "Built offline by scripts/build_basemap.py. Committed so the demo needs no network.",
