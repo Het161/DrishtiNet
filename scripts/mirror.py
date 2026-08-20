@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import os
 import random
 import subprocess
@@ -294,6 +295,198 @@ def mirror_window(cam: Camera, at: int, duration: int, tag: str) -> bool:
 
 
 
+
+
+def input_options(url: str) -> list[str]:
+    """
+    Protocol-appropriate input options.
+
+    `-user_agent` and `-rw_timeout` are HTTP options; passing them for a local file makes ffmpeg
+    fail with "Option user_agent not found". This matters beyond tests — the FILE_LOOP adapter
+    replays mirrored files at the venue, and that path must work with no network at all.
+    """
+    if url.startswith(("http://", "https://")):
+        return ["-user_agent", USER_AGENT, "-rw_timeout", "60000000"]
+    return []
+
+
+def probe_pts_range(path: Path) -> tuple[float | None, float | None]:
+    """
+    True source PTS range of a captured chunk.
+
+    With `-copyts` the container's start_time IS the source position, so this is how a chunk knows
+    where it really came from. Without it, `-ss` + `-c copy` resets timestamps to zero and the
+    provenance is gone.
+    """
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=start_time,duration",
+         "-of", "default=nw=1", str(path)],
+        capture_output=True, text=True, timeout=120,
+    )
+    fields = dict(
+        line.split("=", 1) for line in out.stdout.strip().split("\n") if "=" in line
+    )
+    try:
+        start = float(fields.get("start_time", ""))
+        dur = float(fields.get("duration", ""))
+    except ValueError:
+        return None, None
+    return start, start + dur
+
+
+def capture_chunk(cam: Camera, at: int, duration: int, dest: Path) -> tuple[bool, str]:
+    """
+    One chunk, with its own retries. A failed chunk costs minutes, not the whole window.
+
+    `-ss X -copyts -to X+D` is the only form that both seeks cheaply and preserves source
+    timestamps. Measured on a local file: plain `-ss -t` yields start_time=0 (provenance lost),
+    `-copyts -t` produces an unreadable file, and `-copyts -to` yields start_time=599.75 for a
+    requested 600 — the keyframe snap made visible instead of hidden.
+    """
+    for attempt in range(4):
+        proc = subprocess.run(
+            ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+             *input_options(cam.url),
+             "-ss", str(at), "-copyts", "-i", cam.url, "-to", str(at + duration),
+             "-an", "-c:v", "copy", str(dest)],
+            capture_output=True, text=True,
+        )
+        ok, detail = verify_clip(dest, duration)
+        if proc.returncode == 0 and ok:
+            return True, detail
+        log("chunk_retry", camera=cam.id, at=at, attempt=attempt + 1,
+            detail=detail, stderr=proc.stderr.strip()[:160])
+        dest.unlink(missing_ok=True)
+        backoff_sleep(attempt)
+    return False, "all attempts failed"
+
+
+def concat_chunks(chunks: list[Path], dest: Path) -> tuple[bool, str]:
+    """
+    Join chunks into one file FOR VIEWING ONLY.
+
+    This artifact must never be used to derive a timestamp. `-ss` with `-c copy` snaps every seam
+    back to the previous keyframe, so consecutive chunks overlap by up to one GOP; across nine
+    seams the cumulative overlap would put recorded_at tens of seconds out and quietly break the
+    +/-15 s cross-camera correlation. The per-chunk manifest is the unit of truth; this is a
+    convenience for scrubbing through footage by eye.
+    """
+    listing = dest.with_suffix(".concat.txt")
+    listing.write_text("".join(f"file '{c.resolve()}'\n" for c in chunks))
+    proc = subprocess.run(
+        ["ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
+         "-f", "concat", "-safe", "0", "-i", str(listing),
+         "-c", "copy", "-fflags", "+genpts", str(dest)],
+        capture_output=True, text=True,
+    )
+    listing.unlink(missing_ok=True)
+    if proc.returncode != 0:
+        return False, f"concat failed: {proc.stderr.strip()[:160]}"
+    ok, detail = verify_clip(dest, 0)
+    return ok, detail
+
+
+def mirror_chunked(cam: Camera, at: int, duration: int, chunk_s: int, tag: str) -> bool:
+    """
+    Capture an aligned window in verified chunks, then write a manifest.
+
+    Aligned windows matter more than per-camera completeness: a route demo needs the SAME recorded
+    minutes on three or more cameras, and best-effort clips of differing lengths do not give that.
+
+    Chunks are kept, not deleted. They carry true source PTS and are what the batch indexer reads.
+    """
+    chunk_dir = MIRROR_DIR / "chunks"
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = MIRROR_DIR / f"cam_{cam.id}_{tag}.manifest.json"
+
+    n = math.ceil(duration / chunk_s)
+    print(f"    {n} chunks of {chunk_s}s from offset {at} (recorded {recorded_time_for(at)})")
+
+    entries: list[dict] = []
+    chunks: list[Path] = []
+    prev_last_pts: float | None = None
+
+    for i in range(n):
+        chunk_at = at + i * chunk_s
+        chunk_len = min(chunk_s, at + duration - chunk_at)
+        cpath = chunk_dir / f"cam_{cam.id}_{tag}_{i:03d}.mp4"
+
+        cached = cpath.exists() and verify_clip(cpath, chunk_len)[0]
+        if cached:
+            ok, detail = True, "cached"
+        else:
+            ok, detail = capture_chunk(cam, chunk_at, chunk_len, cpath)
+
+        first_pts, last_pts = probe_pts_range(cpath) if ok else (None, None)
+
+        # How far the keyframe snap pulled us back before the requested time.
+        snap = (chunk_at - first_pts) if first_pts is not None else None
+        # How much of this chunk duplicates the previous one.
+        overlap = (
+            prev_last_pts - first_pts
+            if (first_pts is not None and prev_last_pts is not None and prev_last_pts > first_pts)
+            else 0.0
+        )
+
+        status = "ok  " if ok else "FAIL"
+        extra = ""
+        if first_pts is not None:
+            extra = f" pts={first_pts:.2f} snap={snap:+.2f}s overlap={overlap:.2f}s"
+        print(f"      [{i + 1:>2}/{n}] {status} {recorded_time_for(chunk_at)} {detail}{extra}")
+
+        entries.append({
+            "index": i,
+            "path": str(cpath.relative_to(ROOT)),
+            "requested_offset_s": chunk_at,
+            "requested_duration_s": chunk_len,
+            "actual_first_pts_s": first_pts,
+            "actual_last_pts_s": last_pts,
+            "keyframe_snap_s": snap,
+            "overlap_with_previous_s": overlap,
+            "ok": ok,
+            "detail": detail,
+        })
+        log("chunk", camera=cam.id, tag=tag, index=i, at=chunk_at, ok=ok,
+            first_pts=first_pts, snap=snap, overlap=overlap)
+
+        if ok:
+            chunks.append(cpath)
+            if last_pts is not None:
+                prev_last_pts = last_pts
+        if not cached:
+            time.sleep(1)
+
+    if not chunks:
+        print("    no chunks captured")
+        return False
+
+    manifest = {
+        "camera": cam.id,
+        "tag": tag,
+        "requested_offset_s": at,
+        "requested_duration_s": duration,
+        "chunk_seconds": chunk_s,
+        "captured_at_ist": now_ist(),
+        "note": (
+            "Chunks are the unit of truth: each carries source PTS via -copyts. Derive frame time "
+            "from the chunk's own PTS, never from position inside the concatenated file. When "
+            "indexing across a boundary, drop frames whose PTS <= the previous chunk's last PTS."
+        ),
+        "chunks": entries,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    print(f"    manifest -> {manifest_path.name}")
+
+    dest = MIRROR_DIR / f"cam_{cam.id}_{tag}.mp4"
+    ok, detail = concat_chunks(chunks, dest)
+    total_overlap = sum(e["overlap_with_previous_s"] or 0 for e in entries)
+    print(f"    concat (viewing only): {'ok' if ok else 'FAILED'} {detail} "
+          f"({len(chunks)}/{n} chunks, cumulative seam overlap {total_overlap:.1f}s)")
+    log("chunked_complete", camera=cam.id, tag=tag, chunks_ok=len(chunks),
+        chunks_total=n, cumulative_overlap_s=total_overlap, detail=detail)
+    return len(chunks) == n
+
+
 def verify_mirror() -> int:
     """
     Audit every clip in data/mirror and report what is actually usable.
@@ -329,12 +522,13 @@ def verify_mirror() -> int:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("mode", choices=["sizes", "full", "window", "verify"])
+    ap.add_argument("mode", choices=["sizes", "full", "window", "chunked", "verify"])
     ap.add_argument("--ids", help="comma-separated portal ids")
     ap.add_argument("--at", type=int, default=36000, help="window: seek offset in seconds")
     ap.add_argument("--duration", type=int, default=7200, help="window: length in seconds")
     ap.add_argument("--tag", default="daylight", help="window: filename tag")
     ap.add_argument("--prune", action="store_true", help="verify: delete clips that will not decode")
+    ap.add_argument("--chunk", type=int, default=300, help="chunked: seconds per chunk")
     ap.add_argument(
         "--proxy",
         default=os.environ.get("RANGE_PROXY_URL"),
@@ -383,6 +577,8 @@ def main() -> int:
             size = remote_size(cam.url)
             print(f"    remote size {human(size)}")
             good = mirror_full(cam, size)
+        elif args.mode == "chunked":
+            good = mirror_chunked(cam, args.at, args.duration, args.chunk, args.tag)
         else:
             good = mirror_window(cam, args.at, args.duration, args.tag)
         ok += good
