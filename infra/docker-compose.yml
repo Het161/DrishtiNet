@@ -29,7 +29,9 @@ services:
     ports:
       - '${POSTGRES_PORT:-5433}:5432'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      # POSTGRES_DATA_MOUNT is chosen by measurement, not preference — see README.md.
+      # macOS bind mounts are fsync-hostile and Postgres is fsync-heavy.
+      - ${POSTGRES_DATA_MOUNT:-../data/postgres}:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-drishti} -d ${POSTGRES_DB:-drishtinet}']
       interval: 5s
@@ -46,7 +48,7 @@ services:
     ports:
       - '${REDIS_PORT:-6380}:6379'
     volumes:
-      - redis-data:/data
+      - ../data/redis:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -66,7 +68,7 @@ services:
       - '${MINIO_PORT:-9000}:9000'
       - '${MINIO_CONSOLE_PORT:-9001}:9001'
     volumes:
-      - minio-data:/data
+      - ../data/minio:/data
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
@@ -148,8 +150,11 @@ services:
     ports:
       - '${ANALYTICS_PORT:-8001}:8001'
     volumes:
-      # Model weights persist across rebuilds — a re-download at the venue is not an option.
-      - analytics-models:/app/models
+      # Weights live in the repo and are mounted read-only; nothing is ever downloaded to $HOME
+      # and nothing is written outside the repository.
+      - ../models:/app/models
+      - ../.cache:/app/.cache
+      - ../data:/app/data
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -215,10 +220,8 @@ services:
     networks: [drishti]
 
 volumes:
+  # Declared so POSTGRES_DATA_MOUNT can name it when a bind mount is too slow (see README.md).
   postgres-data:
-  redis-data:
-  minio-data:
-  analytics-models:
 
 networks:
   drishti:

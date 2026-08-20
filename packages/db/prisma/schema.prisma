@@ -1,0 +1,551 @@
+// DrishtiNet — data model.
+//
+// Two conventions worth stating up front, because they shape almost every table:
+//
+//  1. TIME. `recordedAt` is the forensic time an operator sees and the ONLY time used to correlate
+//     events across cameras. `observedAt` is when our pipeline received the frame and exists purely
+//     for latency instrumentation. Raw container PTS is never stored as an event time — it restarts
+//     on every loop of the source file, which would make a reconstructed route run backwards.
+//     See services/stream-gateway/src/slot.ts.
+//
+//  2. PROVENANCE. Wherever the system holds a belief that could be mistaken for a measurement, the
+//     schema forces it to say which it is: `statusSource` on cameras, `locationStatus` +
+//     `locationUncertaintyM` on positions, `mock` on integration enrichments, `confirmed` on
+//     department assignments. A registry that quietly presents guesses as facts is worse than one
+//     with visible gaps.
+//
+// PostGIS: Prisma cannot express `geography`, so `cameras.geom` is declared Unsupported and every
+// spatial read goes through raw SQL in src/spatial.ts. Never try to select it via the client.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  // The postgis Docker image installs these into the database at init time. They must be
+  // declared or every `prisma migrate` reports drift against a database we did not change.
+  extensions = [postgis, postgis_topology, fuzzystrmatch, postgis_tiger_geocoder]
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Organisation
+// ────────────────────────────────────────────────────────────────────────────
+
+model Department {
+  id        String   @id @default(cuid())
+  /// Stable slug, e.g. "police", "gsrtc", "panchayat", "municipal", "health".
+  slug      String   @unique
+  name      String
+  nameGu    String?  @map("name_gu")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  cameras     Camera[]
+  assignments DepartmentAssignment[]
+  users       User[]
+
+  @@map("departments")
+}
+
+/// Every department attribution is an audited event, never a silent field write.
+/// The Sentinel portal exposes no department at all, so any value here came from a human decision
+/// or a reviewed import — and this table records which, and who.
+model DepartmentAssignment {
+  id           String   @id @default(cuid())
+  cameraId     String   @map("camera_id")
+  departmentId String   @map("department_id")
+  /// "ui" | "csv_import" | "label_inference"
+  basis        String
+  /// Free text explaining the decision, shown in the registry UI.
+  rationale    String?
+  /// False for suggestions (e.g. data/seeds/department_suggestions.csv) awaiting review.
+  confirmed    Boolean  @default(false)
+  assignedBy   String   @map("assigned_by")
+  assignedAt   DateTime @default(now()) @map("assigned_at")
+
+  camera     Camera     @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id])
+
+  @@index([cameraId])
+  @@map("department_assignments")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Registry
+// ────────────────────────────────────────────────────────────────────────────
+
+enum LocationStatus {
+  verified
+  approximate
+  unverified
+
+  @@map("location_status")
+}
+
+enum CameraStatus {
+  online
+  degraded
+  offline
+
+  @@map("camera_status")
+}
+
+/// Whether `status` was measured by us or merely asserted by the upstream portal.
+/// Not pedantry: /api/cameras reports camera 6 "live" while its media endpoint returns HTTP 500.
+enum StatusSource {
+  measured
+  portal_claim
+
+  @@map("status_source")
+}
+
+model Camera {
+  id           String  @id @default(cuid())
+  /// The portal's `id`. The ONLY safe key — the number inside the label is not unique
+  /// (portal 17 is labelled "17 Rajkot Bus Port CCTV", portal 18 is labelled "17 Rajkot CCTV").
+  portalId     String  @unique @map("portal_id")
+  /// Exact portal label, preserved verbatim.
+  label        String
+  /// The number embedded in that label. Diverges from portalId after 17; may be absent.
+  labelNumber  Int?    @map("label_number")
+  name         String
+  district     String?
+  cluster      String?
+  departmentId String? @map("department_id")
+
+  /// geography(Point, 4326). Written and read only via raw SQL — see src/spatial.ts.
+  geom                 Unsupported("geography(Point, 4326)")?
+  locationStatus       LocationStatus @default(unverified) @map("location_status")
+  /// Radius in metres the map draws around the marker. Always set, even when verified.
+  locationUncertaintyM Int            @default(15000) @map("location_uncertainty_m")
+
+  status       CameraStatus @default(online)
+  statusSource StatusSource @default(portal_claim) @map("status_source")
+  /// Why a camera is degraded or offline. Required by the app layer for non-online cameras;
+  /// silent unavailability is unactionable for a control-room operator.
+  lastError    String?      @map("last_error")
+
+  retentionDays Int?    @map("retention_days")
+  storageType   String? @map("storage_type")
+  notes         String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  /// Set when the camera stops appearing in the portal roster. We never delete a camera.
+  lastSeenAt DateTime? @map("last_seen_at")
+
+  department  Department?            @relation(fields: [departmentId], references: [id])
+  streams     Stream[]
+  health      CameraHealth[]
+  timeSync    TimeSync[]
+  detections  Detection[]
+  tracks      Track[]
+  alerts      Alert[]
+  assignments DepartmentAssignment[]
+
+  @@index([district])
+  @@index([status])
+  @@index([departmentId])
+  @@map("cameras")
+}
+
+enum SourceType {
+  MP4_PROGRESSIVE
+  RTSP
+  HLS
+  MJPEG
+  FILE_LOOP
+  ONVIF_STUB
+  VMS_SDK_STUB
+
+  @@map("source_type")
+}
+
+model Stream {
+  id           String     @id @default(cuid())
+  cameraId     String     @map("camera_id")
+  sourceType   SourceType @map("source_type")
+  sourceUrl    String     @map("source_url")
+  /// Low-resolution path for analytics, where the source offers one.
+  substreamUrl String?    @map("substream_url")
+  snapshotUrl  String?    @map("snapshot_url")
+  /// Measured, not claimed. Null until probed.
+  durationSeconds Float?  @map("duration_seconds")
+  codec        String?
+  container    String?
+  width        Int?
+  height       Int?
+  fps          Float?
+  sizeBytes    BigInt?    @map("size_bytes")
+  /// True when served from data/mirror rather than the portal. The UI badges this.
+  isLocalMirror Boolean   @default(false) @map("is_local_mirror")
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([cameraId])
+  @@map("streams")
+}
+
+model CameraHealth {
+  id          String       @id @default(cuid())
+  cameraId    String       @map("camera_id")
+  status      CameraStatus
+  lastFrameAt DateTime?    @map("last_frame_at")
+  fps         Float?
+  latencyMs   Int?         @map("latency_ms")
+  detail      String?
+  observedAt  DateTime     @default(now()) @map("observed_at")
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([cameraId, observedAt])
+  @@map("camera_health")
+}
+
+/// Per-camera clock correction, measured from the burned-in overlay clock in the footage.
+///
+/// The source files drift roughly +0.5% against their own burned-in clock, and cameras disagree
+/// with each other by up to ~14 s. Rather than pretend the linear model is exact, we measure the
+/// offset per camera and keep the evidence frame that proves it.
+model TimeSync {
+  id             String   @id @default(cuid())
+  cameraId       String   @map("camera_id")
+  clockOffsetS   Float    @map("clock_offset_s")
+  /// "burned_in_clock" | "manual" | "assumed"
+  measuredFrom   String   @map("measured_from")
+  /// File position at which the offset was measured; drift means it is position-dependent.
+  atPositionS    Float?   @map("at_position_s")
+  measuredAt     DateTime @default(now()) @map("measured_at")
+  /// Path to the frame the reading came from, so the correction is auditable.
+  evidencePath   String?  @map("evidence_path")
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([cameraId])
+  @@map("time_sync")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Analytics
+// ────────────────────────────────────────────────────────────────────────────
+
+model Detection {
+  id         String   @id @default(cuid())
+  cameraId   String   @map("camera_id")
+  trackId    String?  @map("track_id")
+  cls        String
+  confidence Float
+  /// [x1, y1, x2, y2] in pixels of the analysed frame.
+  bbox       Float[]
+  frameW     Int      @map("frame_w")
+  frameH     Int      @map("frame_h")
+  /// Forensic time — used for correlation.
+  recordedAt DateTime @map("recorded_at")
+  /// Receive time — latency instrumentation only.
+  observedAt DateTime @default(now()) @map("observed_at")
+
+  camera Camera @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  track  Track? @relation(fields: [trackId], references: [id], onDelete: SetNull)
+
+  @@index([cameraId, recordedAt])
+  @@index([trackId])
+  @@map("detections")
+}
+
+model Track {
+  id              String   @id @default(cuid())
+  cameraId        String   @map("camera_id")
+  /// Tracker-local id, unique only within one camera session.
+  trackerId       Int      @map("tracker_id")
+  cls             String
+  startedRecordedAt DateTime @map("started_recorded_at")
+  endedRecordedAt   DateTime? @map("ended_recorded_at")
+  frameCount      Int      @default(0) @map("frame_count")
+
+  camera     Camera            @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+  detections Detection[]
+  signature  VehicleSignature?
+  plates     Plate[]
+
+  @@index([cameraId, startedRecordedAt])
+  @@map("tracks")
+}
+
+/// The headline identity signal. On this dataset plates are unreadable at night, so a vehicle is
+/// identified by class + colour + an appearance embedding, with the plate as a bonus when legible.
+model VehicleSignature {
+  id              String  @id @default(cuid())
+  trackId         String  @unique @map("track_id")
+  cls             String
+  colour          String?
+  /// Low light makes colour unreliable; the UI must show this rather than assert a colour.
+  colourConfidence Float? @map("colour_confidence")
+  colourUncertain Boolean @default(false) @map("colour_uncertain")
+  /// Appearance embedding. Stored as float8[]; nearest-neighbour search is served by an
+  /// in-process index rebuilt on load, which is far simpler and faster than pgvector at our scale.
+  embedding       Float[]
+  embeddingModel  String? @map("embedding_model")
+  /// Whatever characters were legible, even a fragment. Never padded or guessed.
+  partialPlate    String? @map("partial_plate")
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_signatures")
+}
+
+model Plate {
+  id         String   @id @default(cuid())
+  trackId    String   @map("track_id")
+  /// Exactly what OCR returned, never overwritten.
+  rawOcr     String   @map("raw_ocr")
+  /// Canonical plate; null when the read failed Indian-grammar validation.
+  normalized String?
+  valid      Boolean  @default(false)
+  /// True when OCR confusion-pair repair produced the value. Operators must see this.
+  repaired   Boolean  @default(false)
+  confidence Float
+  framesConsidered Int @default(1) @map("frames_considered")
+  agreement  Float    @default(1)
+  /// Other canonical plates this read could plausibly be — used for watchlist recall.
+  alternates String[]
+  cropKey    String?  @map("crop_key")
+  recordedAt DateTime @map("recorded_at")
+
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@index([normalized])
+  @@index([trackId])
+  @@map("plates")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Watchlists and alerts
+// ────────────────────────────────────────────────────────────────────────────
+
+enum AlertPriority {
+  critical
+  high
+  medium
+  low
+
+  @@map("alert_priority")
+}
+
+enum AlertStatus {
+  new
+  acknowledged
+  escalated
+  resolved
+  false_positive
+
+  @@map("alert_status")
+}
+
+enum EntityType {
+  vehicle_plate
+  vehicle_attributes
+  person
+  object
+
+  @@map("entity_type")
+}
+
+model Watchlist {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean  @default(true)
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  entries WatchlistEntry[]
+
+  @@map("watchlists")
+}
+
+model WatchlistEntry {
+  id          String        @id @default(cuid())
+  watchlistId String        @map("watchlist_id")
+  entityType  EntityType    @map("entity_type")
+  /// Canonical plate for vehicle_plate entries; a descriptor otherwise.
+  entityValue String        @map("entity_value")
+  reason      String
+  priority    AlertPriority
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  watchlist Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  alerts    Alert[]
+
+  @@index([entityValue])
+  @@index([watchlistId])
+  @@map("watchlist_entries")
+}
+
+model Alert {
+  id               String        @id @default(cuid())
+  /// "internal_anpr" | "internal_reid" | "vahan" | ... | "manual"
+  source           String
+  /// True whenever any part of this alert came from a mocked external system.
+  mock             Boolean       @default(false)
+  priority         AlertPriority
+  status           AlertStatus   @default(new)
+  entityType       EntityType    @map("entity_type")
+  entityValue      String        @map("entity_value")
+  reason           String
+  watchlistEntryId String?       @map("watchlist_entry_id")
+  cameraId         String        @map("camera_id")
+  confidence       Float
+  repaired         Boolean       @default(false)
+  /// Which candidate matched, when the match came from a plate alternate rather than the primary.
+  matchedVia       String?       @map("matched_via")
+  evidenceClipId   String?       @map("evidence_clip_id")
+  /// detection → alert emitted, measured server-side.
+  pipelineLatencyMs Int?         @map("pipeline_latency_ms")
+
+  recordedAt DateTime @map("recorded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  camera          Camera                 @relation(fields: [cameraId], references: [id])
+  watchlistEntry  WatchlistEntry?        @relation(fields: [watchlistEntryId], references: [id])
+  evidenceClip    EvidenceClip?          @relation(fields: [evidenceClipId], references: [id])
+  acknowledgements AlertAcknowledgement[]
+  enrichments     AlertEnrichment[]
+
+  @@index([status, priority, recordedAt])
+  @@index([cameraId, recordedAt])
+  @@map("alerts")
+}
+
+model AlertAcknowledgement {
+  id      String      @id @default(cuid())
+  alertId String      @map("alert_id")
+  actor   String
+  action  AlertStatus
+  note    String?
+  at      DateTime    @default(now())
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@map("alert_acknowledgements")
+}
+
+/// Data pulled from an external system to enrich an alert. `mock` is mandatory, so an
+/// unlabelled enrichment is impossible to construct.
+model AlertEnrichment {
+  id        String   @id @default(cuid())
+  alertId   String   @map("alert_id")
+  source    String
+  mock      Boolean
+  payload   Json
+  error     String?
+  fetchedAt DateTime @default(now()) @map("fetched_at")
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@map("alert_enrichments")
+}
+
+model EvidenceClip {
+  id       String @id @default(cuid())
+  /// Object key in MinIO.
+  path     String
+  sha256   String
+  sizeBytes BigInt? @map("size_bytes")
+  cameraId String  @map("camera_id")
+  startRecordedAt DateTime @map("start_recorded_at")
+  endRecordedAt   DateTime @map("end_recorded_at")
+  createdBy String  @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  /// Append-only custody trail: who exported, when, why, and every subsequent access.
+  chainOfCustody Json @map("chain_of_custody")
+
+  alerts Alert[]
+
+  @@index([sha256])
+  @@map("evidence_clips")
+}
+
+/// Generic system event log (pipeline lifecycle, ingest errors, slot rollovers).
+/// Distinct from audit_log, which records human actions.
+model Event {
+  id        String   @id @default(cuid())
+  kind      String
+  cameraId  String?  @map("camera_id")
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([kind, createdAt])
+  @@map("events")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Identity and audit
+// ────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  state_admin
+  department_admin
+  control_room_operator
+  investigator
+  auditor
+
+  @@map("role")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  displayName  String   @map("display_name")
+  passwordHash String   @map("password_hash")
+  role         Role
+  /// Department admins and operators are scoped to their own department.
+  departmentId String?  @map("department_id")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  @@map("users")
+}
+
+/// Reference table mirroring packages/shared/src/rbac.ts so an admin UI can enumerate
+/// capabilities. The CODE remains the enforcement point; this is documentation with a primary key.
+model Permission {
+  id          String @id @default(cuid())
+  key         String @unique
+  description String
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id            String @id @default(cuid())
+  role          Role
+  permissionKey String @map("permission_key")
+
+  @@unique([role, permissionKey])
+  @@map("role_permissions")
+}
+
+/// Human actions. Append-only by convention and enforced by a trigger in the SQL migration:
+/// an audit trail that can be edited is not an audit trail.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  meta      Json?
+  /// True when the action happened while VIRTUAL_NOW_IST was active.
+  timeShifted Boolean @default(false) @map("time_shifted")
+  at        DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([at])
+  @@map("audit_log")
+}
