@@ -82,8 +82,16 @@ class Camera:
     url: str
 
 
-def load_cameras(ids: list[str] | None) -> list[Camera]:
-    """Read the roster through the validated TypeScript loader — never re-parse the YAML here."""
+def load_cameras(ids: list[str] | None, proxy: str | None = None) -> list[Camera]:
+    """
+    Read the roster through the validated TypeScript loader — never re-parse the YAML here.
+
+    When `proxy` is set, camera URLs point at the local caching range proxy instead of the portal.
+    That is strongly preferred for `window` mode: FFmpeg's `-ss` against the portal issues an
+    un-ranged GET that the origin frequently answers with an empty body, so deep seeks (exactly the
+    ones that reach the daylight footage) fail. Through the proxy every upstream read is ranged,
+    retried and cached. See services/stream-gateway/src/range-proxy.ts.
+    """
     out = subprocess.run(
         ["pnpm", "-s", "exec", "tsx", "src/cli.ts", "list", "--tsv", "id,url"],
         cwd=ROOT / "services" / "stream-gateway",
@@ -100,7 +108,8 @@ def load_cameras(ids: list[str] | None) -> list[Camera]:
             continue
         cid, url = line.split("\t")[:2]
         if ids is None or cid in ids:
-            cameras.append(Camera(id=cid, url=f"{BASE}{url}"))
+            full = f"{proxy.rstrip('/')}/cam/{cid}" if proxy else f"{BASE}{url}"
+            cameras.append(Camera(id=cid, url=full))
     return cameras
 
 
@@ -242,14 +251,21 @@ def main() -> int:
     ap.add_argument("--at", type=int, default=36000, help="window: seek offset in seconds")
     ap.add_argument("--duration", type=int, default=7200, help="window: length in seconds")
     ap.add_argument("--tag", default="daylight", help="window: filename tag")
+    ap.add_argument(
+        "--proxy",
+        default=os.environ.get("RANGE_PROXY_URL"),
+        help="route reads through the local caching range proxy (e.g. http://127.0.0.1:4010). "
+             "Required in practice for deep seeks; the portal fails un-ranged GETs.",
+    )
     args = ap.parse_args()
 
     ids = [i.strip() for i in args.ids.split(",")] if args.ids else None
-    cameras = load_cameras(ids)
+    cameras = load_cameras(ids, args.proxy)
     if not cameras:
         sys.exit("no cameras matched")
 
-    print(f"mode={args.mode}  cameras={len(cameras)}  rate limit={RATE_LIMIT}  base={BASE}")
+    origin = args.proxy or BASE
+    print(f"mode={args.mode}  cameras={len(cameras)}  rate limit={RATE_LIMIT}  via={origin}")
     print(f"destination: {MIRROR_DIR}   log: {LOG_PATH}\n")
 
     if args.mode == "sizes":
