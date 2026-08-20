@@ -47,9 +47,10 @@ meta:
 
 defaults:
   source_type: MP4_PROGRESSIVE
-  status: unknown
   department: unassigned
 
+  location_status: unverified
+  status: online
 cameras:
   - portal_id: '1'
     label: '01 Chiman bhai Bridge'
@@ -62,7 +63,6 @@ cameras:
     source_url: /stream/1
     lat: 23.075
     lng: 72.600
-    geo_confidence: approx
     cluster: ahmedabad-north
 
     codec: h264
@@ -70,6 +70,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '2'
     label: '02 Janpath'
     label_number: 2
@@ -81,7 +86,6 @@ cameras:
     source_url: /stream/2
     lat:
     lng:
-    geo_confidence: geocode
     cluster: ahmedabad
 
     codec: h264
@@ -89,6 +93,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '3'
     label: '03 O.N.G.C. Office'
     label_number: 3
@@ -100,7 +109,6 @@ cameras:
     source_url: /stream/3
     lat: 23.110
     lng: 72.600
-    geo_confidence: approx
     cluster: ahmedabad-north
 
     codec: h264
@@ -108,6 +116,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '4'
     label: '04 Paldi Circle'
     label_number: 4
@@ -119,7 +132,6 @@ cameras:
     source_url: /stream/4
     lat: 23.012
     lng: 72.564
-    geo_confidence: high
     cluster: ahmedabad-central
 
     codec: h264
@@ -127,6 +139,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: verified
+    location_uncertainty_m: 25
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '5'
     label: '05 Visat teen Rasta'
     label_number: 5
@@ -138,7 +155,6 @@ cameras:
     source_url: /stream/5
     lat: 23.108
     lng: 72.589
-    geo_confidence: high
     cluster: ahmedabad-north
 
     codec: h264
@@ -146,6 +162,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: verified
+    location_uncertainty_m: 25
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '6'
     label: '06 Timbavadi gate-Junagadh'
     label_number: 6
@@ -157,7 +178,6 @@ cameras:
     source_url: /stream/6
     lat: 21.499
     lng: 70.470
-    geo_confidence: approx
     cluster: junagadh
     # AVI container — needs a transcode leg in the gateway, see data/probe/REPORT.md
     notes: non-H.264 source container
@@ -167,6 +187,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: offline
+    last_error: HTTP 500 from origin (AVI container), measured 2026-08-20
+    status_source: measured
   - portal_id: '7'
     label: '07 hero-showroom-gir-somnath'
     label_number: 7
@@ -178,7 +203,6 @@ cameras:
     source_url: /stream/7
     lat: 20.910
     lng: 70.370
-    geo_confidence: approx
     cluster: gir-somnath
 
     codec: h264
@@ -186,6 +210,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '8'
     label: '08 majewadi-gate-junagadh'
     label_number: 8
@@ -197,7 +226,6 @@ cameras:
     source_url: /stream/8
     lat: 21.530
     lng: 70.462
-    geo_confidence: approx
     cluster: junagadh
 
     codec: h264
@@ -205,6 +233,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '9'
     label: '09 new-bypass-near-by-circle-junagadh-2'
     label_number: 9
@@ -216,7 +249,6 @@ cameras:
     source_url: /stream/9
     lat:
     lng:
-    geo_confidence: geocode
     cluster: junagadh
 
     codec: h264
@@ -224,6 +256,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '10'
     label: '10 char-chowk-road-2-junagadh'
     label_number: 10
@@ -235,7 +272,6 @@ cameras:
     source_url: /stream/10
     lat: 21.521
     lng: 70.458
-    geo_confidence: approx
     cluster: junagadh
 
     codec: h264
@@ -243,6 +279,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '11'
     label: '11 dolatpara-junagadh'
     label_number: 11
@@ -254,7 +295,6 @@ cameras:
     source_url: /stream/11
     lat: 21.555
     lng: 70.445
-    geo_confidence: approx
     cluster: junagadh
 
     codec: h264
@@ -262,6 +302,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '12'
     label: '12 Tri Mandir Adalaj Tollnaka'
     label_number: 12
@@ -273,7 +318,6 @@ cameras:
     source_url: /stream/12
     lat: 23.165
     lng: 72.580
-    geo_confidence: high
     cluster: ahmedabad-north
 
     codec: h264
@@ -281,6 +325,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: verified
+    location_uncertainty_m: 25
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '13'
     label: '13 CN Vidhyalaya'
     label_number: 13
@@ -292,7 +341,6 @@ cameras:
     source_url: /stream/13
     lat: 23.026
     lng: 72.555
-    geo_confidence: approx
     cluster: ahmedabad-central
 
     codec: h264
@@ -300,6 +348,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '14'
     label: '14 Delight'
     label_number: 14
@@ -311,7 +364,6 @@ cameras:
     source_url: /stream/14
     lat:
     lng:
-    geo_confidence: geocode
     cluster: ahmedabad
 
     codec: h264
@@ -319,6 +371,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '15'
     label: '15 Suvidha park'
     label_number: 15
@@ -330,7 +387,6 @@ cameras:
     source_url: /stream/15
     lat:
     lng:
-    geo_confidence: geocode
     cluster: ahmedabad
 
     codec: h264
@@ -338,6 +394,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '16'
     label: '16 Visat P2'
     label_number: 16
@@ -349,7 +410,6 @@ cameras:
     source_url: /stream/16
     lat: 23.108
     lng: 72.589
-    geo_confidence: high
     cluster: ahmedabad-north
     notes: same junction as portal_id 5 — a genuine two-angle pair, useful for re-ID testing
 
@@ -358,6 +418,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: verified
+    location_uncertainty_m: 25
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '17'
     label: '17 Rajkot Bus Port CCTV'
     label_number: 17
@@ -369,7 +434,6 @@ cameras:
     source_url: /stream/17
     lat: 22.296
     lng: 70.792
-    geo_confidence: approx
     cluster: rajkot
 
     codec: h264
@@ -377,6 +441,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '18'
     label: '17 Rajkot CCTV'
     label_number: 17
@@ -388,7 +457,6 @@ cameras:
     source_url: /stream/18
     lat:
     lng:
-    geo_confidence: geocode
     cluster: rajkot
     notes: label_number collides with portal_id 17 — portal_id is the only safe key
 
@@ -397,6 +465,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '19'
     label: '18 Rajkot CCTV'
     label_number: 18
@@ -408,7 +481,6 @@ cameras:
     source_url: /stream/19
     lat:
     lng:
-    geo_confidence: geocode
     cluster: rajkot
 
     codec: h264
@@ -416,6 +488,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '20'
     label: '19 KHAPARIA GRAM PANCHAYAT , TALUKA GANDEVI, DISTRICT NAVSARI'
     label_number: 19
@@ -427,7 +504,6 @@ cameras:
     source_url: /stream/20
     lat: 20.820
     lng: 72.980
-    geo_confidence: approx
     cluster: navsari
 
     codec: h264
@@ -435,6 +511,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: measured
   - portal_id: '21'
     label: '20 Mohanpura'
     label_number: 20
@@ -446,7 +527,6 @@ cameras:
     source_url: /stream/21
     lat:
     lng:
-    geo_confidence: geocode
     cluster:
     notes: district unresolved — "Mohanpura" occurs in several Gujarat districts
 
@@ -455,6 +535,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '22'
     label: '23 Patan Dethali Char Rasta'
     label_number: 23
@@ -466,7 +551,6 @@ cameras:
     source_url: /stream/22
     lat: 23.850
     lng: 72.130
-    geo_confidence: approx
     cluster: north-gujarat
 
     codec: h264
@@ -474,6 +558,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '23'
     label: '28 BK Mervada tran Rasta'
     label_number: 28
@@ -485,7 +574,6 @@ cameras:
     source_url: /stream/23
     lat:
     lng:
-    geo_confidence: geocode
     cluster: north-gujarat
     notes: non-H.264 source container
 
@@ -494,6 +582,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: degraded
+    last_error: AVI container; range-seek not yet verified
+    status_source: measured
   - portal_id: '24'
     label: '30 kheram'
     label_number: 30
@@ -505,7 +598,6 @@ cameras:
     source_url: /stream/24
     lat:
     lng:
-    geo_confidence: geocode
     cluster:
 
     codec: h264
@@ -513,6 +605,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '25'
     label: '33 dehgam'
     label_number: 33
@@ -524,7 +621,6 @@ cameras:
     source_url: /stream/25
     lat: 23.170
     lng: 72.810
-    geo_confidence: approx
     cluster: gandhinagar-east
 
     codec: h264
@@ -532,6 +628,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '26'
     label: '34 dhanori'
     label_number: 34
@@ -543,7 +644,6 @@ cameras:
     source_url: /stream/26
     lat:
     lng:
-    geo_confidence: geocode
     cluster:
 
     codec: h264
@@ -551,6 +651,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '27'
     label: '35 TANKAL'
     label_number: 35
@@ -562,7 +667,6 @@ cameras:
     source_url: /stream/27
     lat:
     lng:
-    geo_confidence: geocode
     cluster: navsari
 
     codec: h264
@@ -570,6 +674,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: unverified
+    location_uncertainty_m: 15000
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '28'
     label: '36 bilimora'
     label_number: 36
@@ -581,7 +690,6 @@ cameras:
     source_url: /stream/28
     lat: 20.770
     lng: 72.960
-    geo_confidence: approx
     cluster: navsari
 
     codec: h264
@@ -589,6 +697,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '29'
     label: '37 bilimora'
     label_number: 37
@@ -600,7 +713,6 @@ cameras:
     source_url: /stream/29
     lat: 20.770
     lng: 72.960
-    geo_confidence: approx
     cluster: navsari
 
     codec: h264
@@ -608,6 +720,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '30'
     label: '38 bilimora'
     label_number: 38
@@ -619,7 +736,6 @@ cameras:
     source_url: /stream/30
     lat: 20.770
     lng: 72.960
-    geo_confidence: approx
     cluster: navsari
 
     codec: h264
@@ -627,6 +743,11 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: portal_claim
   - portal_id: '31'
     label: Gandhidham Rambaugh p2
     label_number:
@@ -638,7 +759,6 @@ cameras:
     source_url: /stream/31
     lat: 23.080
     lng: 70.130
-    geo_confidence: approx
     cluster: kutch
     notes: only camera whose label carries no leading number
     codec: h264
@@ -646,3 +766,8 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
+    location_status: approximate
+    location_uncertainty_m: 500
+    status: online
+    last_error:
+    status_source: measured

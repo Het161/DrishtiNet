@@ -33,7 +33,9 @@ function field(cam: CameraConfigEntry, name: string): string {
     department: cam.department,
     lat: cam.lat ?? '',
     lng: cam.lng ?? '',
-    geo: cam.geoConfidence,
+    geo: cam.locationStatus,
+    status: cam.status,
+    uncertainty: String(cam.locationUncertaintyM),
     cluster: cam.cluster ?? '',
     duration: cam.durationSeconds ?? '',
     // Where "now" sits inside this camera's file. Falls back to the raw slot offset when we have
@@ -86,12 +88,12 @@ async function main(): Promise<number> {
   console.log(`upstream: ${cfg.meta.source}  slot: ${cfg.meta.slotSeconds}s  tz: ${cfg.meta.timezone}`);
   console.log('');
   console.log(
-    `${pad('id', 4)} ${pad('name', 32)} ${pad('district', 14)} ${pad('geo', 8)} ${pad('cluster', 18)} url`,
+    `${pad('id', 4)} ${pad('name', 32)} ${pad('district', 14)} ${pad('location', 12)} ${pad('cluster', 18)} url`,
   );
   for (const cam of cfg.cameras) {
     console.log(
       `${pad(cam.id, 4)} ${pad(cam.name, 32)} ${pad(cam.district ?? '—', 14)} ` +
-        `${pad(cam.geoConfidence, 8)} ${pad(cam.cluster ?? '—', 18)} ${cam.sourceUrl}`,
+        `${pad(cam.locationStatus, 12)} ${pad(cam.cluster ?? '—', 18)} ${cam.sourceUrl}`,
     );
   }
 

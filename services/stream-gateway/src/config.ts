@@ -10,7 +10,24 @@ import { parse } from 'yaml';
 
 import type { CameraSource, SourceType } from './adapters/types.js';
 
-export type GeoConfidence = 'high' | 'approx' | 'geocode';
+/**
+ * How much we actually know about where a camera is.
+ *   verified    — an identifiable junction; draw a confident marker
+ *   approximate — right town/area, junction position estimated
+ *   unverified  — district centroid only; draw a hollow marker + uncertainty circle
+ */
+export type LocationStatus = 'verified' | 'approximate' | 'unverified';
+
+/** Measured availability. Distinct from what the portal claims — see `statusSource`. */
+export type CameraStatus = 'online' | 'degraded' | 'offline';
+
+/**
+ * Whether `status` reflects our own probe or merely the portal's assertion.
+ * This distinction is not pedantry: `/api/cameras` reports camera 6 as `"live"` while its media
+ * endpoint returns HTTP 500. A registry that repeats an upstream claim as though it had checked is
+ * exactly the kind of thing an SCRB evaluator should not have to catch for us.
+ */
+export type StatusSource = 'measured' | 'portal_claim';
 
 export interface CameraConfigEntry extends CameraSource {
   label: string;
@@ -21,7 +38,12 @@ export interface CameraConfigEntry extends CameraSource {
   departmentGuess: string | null;
   lat: number | null;
   lng: number | null;
-  geoConfidence: GeoConfidence;
+  locationStatus: LocationStatus;
+  /** Radius in metres the map draws around the marker. Always set. */
+  locationUncertaintyM: number;
+  status: CameraStatus;
+  statusSource: StatusSource;
+  lastError: string | null;
   cluster: string | null;
   notes: string | null;
 }
@@ -44,7 +66,11 @@ const VALID_SOURCE_TYPES: ReadonlySet<string> = new Set<SourceType>([
   'MP4_PROGRESSIVE', 'RTSP', 'HLS', 'MJPEG', 'FILE_LOOP', 'ONVIF_STUB', 'VMS_SDK_STUB',
 ]);
 
-const VALID_GEO: ReadonlySet<string> = new Set(['high', 'approx', 'geocode']);
+const VALID_LOCATION_STATUS: ReadonlySet<string> = new Set([
+  'verified', 'approximate', 'unverified',
+]);
+const VALID_STATUS: ReadonlySet<string> = new Set(['online', 'degraded', 'offline']);
+const VALID_STATUS_SOURCE: ReadonlySet<string> = new Set(['measured', 'portal_claim']);
 
 function req<T>(value: T | undefined | null, field: string, id: unknown): T {
   if (value === undefined || value === null) {
@@ -72,9 +98,24 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
       throw new Error(`camera ${id}: unknown source_type "${sourceType}"`);
     }
 
-    const geoConfidence = String(c.geo_confidence ?? 'geocode');
-    if (!VALID_GEO.has(geoConfidence)) {
-      throw new Error(`camera ${id}: unknown geo_confidence "${geoConfidence}"`);
+    const locationStatus = String(c.location_status ?? defaults.location_status ?? 'unverified');
+    if (!VALID_LOCATION_STATUS.has(locationStatus)) {
+      throw new Error(`camera ${id}: unknown location_status "${locationStatus}"`);
+    }
+
+    const status = String(c.status ?? defaults.status ?? 'online');
+    if (!VALID_STATUS.has(status)) {
+      throw new Error(`camera ${id}: unknown status "${status}"`);
+    }
+
+    const statusSource = String(c.status_source ?? 'portal_claim');
+    if (!VALID_STATUS_SOURCE.has(statusSource)) {
+      throw new Error(`camera ${id}: unknown status_source "${statusSource}"`);
+    }
+
+    const uncertainty = c.location_uncertainty_m;
+    if (typeof uncertainty !== 'number' || !Number.isFinite(uncertainty) || uncertainty < 0) {
+      throw new Error(`camera ${id}: location_uncertainty_m must be a non-negative number`);
     }
 
     // A coordinate is either fully present or fully absent; half a point is a bug, not a location.
@@ -83,11 +124,15 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
     if (hasLat !== hasLng) {
       throw new Error(`camera ${id}: lat and lng must both be set or both be null`);
     }
-    if (hasLat && geoConfidence === 'geocode') {
-      throw new Error(`camera ${id}: has coordinates but is still flagged geo_confidence=geocode`);
+    if (hasLat && locationStatus === 'unverified') {
+      throw new Error(`camera ${id}: has coordinates but is flagged location_status=unverified`);
     }
-    if (!hasLat && geoConfidence !== 'geocode') {
-      throw new Error(`camera ${id}: no coordinates, so geo_confidence must be "geocode"`);
+    if (!hasLat && locationStatus !== 'unverified') {
+      throw new Error(`camera ${id}: no coordinates, so location_status must be "unverified"`);
+    }
+    // An offline camera must say why. Silent unavailability is unactionable for an operator.
+    if (status !== 'online' && !c.last_error) {
+      throw new Error(`camera ${id}: status "${status}" requires a last_error explaining it`);
     }
 
     return {
@@ -105,7 +150,11 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
       departmentGuess: c.department_guess ?? null,
       lat: hasLat ? Number(c.lat) : null,
       lng: hasLng ? Number(c.lng) : null,
-      geoConfidence: geoConfidence as GeoConfidence,
+      locationStatus: locationStatus as LocationStatus,
+      locationUncertaintyM: uncertainty,
+      status: status as CameraStatus,
+      statusSource: statusSource as StatusSource,
+      lastError: c.last_error ?? null,
       cluster: c.cluster ?? null,
       notes: c.notes ?? null,
     };
@@ -127,7 +176,7 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
   };
 }
 
-/** Cameras whose position is still unresolved. The map renders these differently. */
+/** Cameras whose position is still unresolved. The map renders these as hollow + uncertainty circle. */
 export function unlocatedCameras(cfg: CamerasConfig): CameraConfigEntry[] {
-  return cfg.cameras.filter((c) => c.geoConfidence === 'geocode');
+  return cfg.cameras.filter((c) => c.locationStatus === 'unverified');
 }

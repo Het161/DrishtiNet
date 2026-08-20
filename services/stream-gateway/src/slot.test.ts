@@ -7,6 +7,13 @@ import {
   playbackPositionSeconds,
   secondsUntilLoop,
   describeSlot,
+  RECORDING_EPOCH_MS,
+  MEASURED_POSITION_DRIFT_RATE,
+  recordedAtMs,
+  withinCorrelationTolerance,
+  virtualNowOffsetMs,
+  isTimeShifted,
+  now,
 } from './slot.js';
 
 /**
@@ -146,5 +153,89 @@ describe('describeSlot', () => {
   it('labels the evening slot', () => {
     expect(describeSlot(new Date('2026-08-20T22:30:00+05:30').getTime()))
       .toBe('slot 21:00–09:00 IST, 1h30m in');
+  });
+});
+
+describe('time model — recorded_at', () => {
+  it('anchors the recording epoch at 2026-06-13 21:00 IST', () => {
+    const ist = new Date(RECORDING_EPOCH_MS).toLocaleString('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+    expect(ist).toBe('13/06/2026, 21:00:00');
+  });
+
+  it.each([
+    // position, burned-in clock observed on camera 10 during Phase 0
+    [0, '13/06/2026, 21:00:00'],
+    [10800, '14/06/2026, 00:00:00'],
+    [21600, '14/06/2026, 03:00:00'],
+    [36000, '14/06/2026, 07:00:00'],
+  ])('maps position %i s to recorded time %s', (position, expected) => {
+    const ist = new Date(recordedAtMs(position)).toLocaleString('en-GB', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    });
+    expect(ist).toBe(expected);
+  });
+
+  it('applies a per-camera clock offset from time_sync', () => {
+    const base = recordedAtMs(1305);
+    const corrected = recordedAtMs(1305, 9); // camera 10 measured ~+9 s at this position
+    expect(corrected - base).toBe(9000);
+  });
+
+  it('stays within the measured drift of the observed burned-in clocks', () => {
+    // Observed: position 10800 → 00:00:53, position 21600 → 03:01:50.
+    const cases: [number, string][] = [[10800, '2026-06-14T00:00:53+05:30'],
+                                       [21600, '2026-06-14T03:01:50+05:30']];
+    for (const [position, observedIso] of cases) {
+      const drift = Math.abs(Date.parse(observedIso) - recordedAtMs(position)) / 1000;
+      expect(drift).toBeLessThan(position * MEASURED_POSITION_DRIFT_RATE + 5);
+    }
+  });
+});
+
+describe('withinCorrelationTolerance', () => {
+  it('treats readings 14 s apart as the same moment — the measured cross-camera spread', () => {
+    const t = recordedAtMs(1305);
+    expect(withinCorrelationTolerance(t, t + 14_000)).toBe(true);
+  });
+
+  it('rejects readings beyond the tolerance', () => {
+    const t = recordedAtMs(1305);
+    expect(withinCorrelationTolerance(t, t + 20_000)).toBe(false);
+  });
+});
+
+describe('VIRTUAL_NOW_IST', () => {
+  it('is inert by default', () => {
+    expect(virtualNowOffsetMs({})).toBe(0);
+    expect(isTimeShifted({})).toBe(false);
+  });
+
+  it('shifts the clock to the configured instant', () => {
+    const target = '2026-08-21T07:15:00+05:30';
+    const env = { VIRTUAL_NOW_IST: target } as NodeJS.ProcessEnv;
+    expect(isTimeShifted(env)).toBe(true);
+    expect(Math.abs(now(env) - Date.parse(target))).toBeLessThan(1000);
+  });
+
+  it('lands the shifted clock in the daylight window it exists for', () => {
+    // 07:15 IST is in the evening slot, so position ≈ 36900 → recorded ≈ 07:15. Daylight.
+    const env = { VIRTUAL_NOW_IST: '2026-08-21T07:15:00+05:30' } as NodeJS.ProcessEnv;
+    const position = playbackPositionSeconds({ durationSeconds: 43200, nowMs: now(env) });
+    const recordedHour = new Date(recordedAtMs(position)).toLocaleString('en-GB', {
+      timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false,
+    });
+    expect(Number(recordedHour)).toBeGreaterThanOrEqual(6);
+    expect(Number(recordedHour)).toBeLessThan(9);
+  });
+
+  it('refuses an unparseable value rather than silently ignoring it', () => {
+    expect(() => virtualNowOffsetMs({ VIRTUAL_NOW_IST: 'tomorrow morning' } as NodeJS.ProcessEnv))
+      .toThrow(/not a parseable timestamp/);
   });
 });

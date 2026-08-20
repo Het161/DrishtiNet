@@ -22,6 +22,12 @@ const ROOT = resolve(HERE, '../../..');
 const LOG_PATH = resolve(ROOT, 'data/transfer.log');
 const CACHE_DIR = resolve(ROOT, '.cache/rangeproxy');
 
+/** ISO-8601 with the +05:30 offset, so every line in data/transfer.log is on one clock. */
+function istTimestamp(at: Date = new Date()): string {
+  const ist = new Date(at.getTime() + 5.5 * 3600 * 1000);
+  return `${ist.toISOString().slice(0, 23)}+05:30`;
+}
+
 function parseBytes(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const m = /^(\d+(?:\.\d+)?)\s*([KMG])?B?$/i.exec(value.trim());
@@ -48,7 +54,9 @@ async function main(): Promise<void> {
     ),
     onLog: (event, fields) => {
       const line = JSON.stringify({
-        ts: new Date().toISOString(),
+        // IST, matching scripts/mirror.py. A forensic log with two timezones in it is a log you
+        // cannot reason about at 02:00 the night before a demo.
+        ts: istTimestamp(),
         source: 'range-proxy',
         event,
         ...fields,
