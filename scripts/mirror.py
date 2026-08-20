@@ -276,6 +276,14 @@ def mirror_window(cam: Camera, at: int, duration: int, tag: str) -> bool:
 
         reason = detail if not ok else proc.stderr.strip()[:120]
         print(f"    attempt {attempt+1} failed ({reason})")
+        # A clip that decodes but fell short is still useful footage; only delete what cannot be
+        # opened at all. Throwing away 100 MB of valid video because it was 40% short is worse
+        # than keeping it and saying so.
+        decodable, _ = verify_clip(dest, 0)
+        if decodable:
+            print(f"    keeping the partial clip ({human(dest.stat().st_size)}) — it decodes")
+            log("window_partial", camera=cam.id, tag=tag, bytes=dest.stat().st_size)
+            return True
         log("window_retry", camera=cam.id, tag=tag, attempt=attempt + 1,
             stderr=proc.stderr.strip()[:200])
         dest.unlink(missing_ok=True)
@@ -285,13 +293,48 @@ def mirror_window(cam: Camera, at: int, duration: int, tag: str) -> bool:
     return False
 
 
+
+def verify_mirror() -> int:
+    """
+    Audit every clip in data/mirror and report what is actually usable.
+
+    Necessary because a capture can die between writing bytes and writing the MP4 `moov` atom,
+    leaving a plausible-looking file that no decoder will open. Discovering that during the demo
+    instead of now is the failure this exists to prevent.
+    """
+    clips = sorted(MIRROR_DIR.glob("*.mp4"))
+    if not clips:
+        print("no clips in data/mirror")
+        return 0
+
+    good, bad = [], []
+    print(f"{'clip':<28} {'size':>9}  status")
+    print("-" * 60)
+    for clip in clips:
+        ok, detail = verify_clip(clip, 0)  # 0 = accept any duration, only check decodability
+        size = human(clip.stat().st_size)
+        print(f"{clip.name:<28} {size:>9}  {'OK  ' if ok else 'BAD '} {detail}")
+        (good if ok else bad).append(clip)
+
+    print("-" * 60)
+    print(f"usable: {len(good)}   unusable: {len(bad)}")
+    if bad:
+        print("\nUnusable clips (re-capture these):")
+        for clip in bad:
+            print(f"  {clip.name}")
+        print("\nRemove them with:  python3 scripts/mirror.py verify --prune")
+    log("verify", usable=[c.name for c in good], unusable=[c.name for c in bad])
+    return 0 if not bad else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("mode", choices=["sizes", "full", "window"])
+    ap.add_argument("mode", choices=["sizes", "full", "window", "verify"])
     ap.add_argument("--ids", help="comma-separated portal ids")
     ap.add_argument("--at", type=int, default=36000, help="window: seek offset in seconds")
     ap.add_argument("--duration", type=int, default=7200, help="window: length in seconds")
     ap.add_argument("--tag", default="daylight", help="window: filename tag")
+    ap.add_argument("--prune", action="store_true", help="verify: delete clips that will not decode")
     ap.add_argument(
         "--proxy",
         default=os.environ.get("RANGE_PROXY_URL"),
@@ -299,6 +342,17 @@ def main() -> int:
              "Required in practice for deep seeks; the portal fails un-ranged GETs.",
     )
     args = ap.parse_args()
+
+    if args.mode == "verify":
+        rc = verify_mirror()
+        if args.prune:
+            for clip in sorted(MIRROR_DIR.glob("*.mp4")):
+                ok, _ = verify_clip(clip, 0)
+                if not ok:
+                    clip.unlink()
+                    print(f"removed {clip.name}")
+                    log("verify_pruned", clip=clip.name)
+        return rc
 
     ids = [i.strip() for i in args.ids.split(",")] if args.ids else None
     cameras = load_cameras(ids, args.proxy)

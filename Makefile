@@ -98,6 +98,10 @@ sync-registry: ## Sync config/cameras.yaml against the portal roster (never dele
 capture: ## Capture daylight + night windows for the demo cameras (needs `make proxy`)
 	./scripts/capture_demo_windows.sh
 
+.PHONY: verify-mirror
+verify-mirror: ## Audit data/mirror: which captured clips actually decode
+	python3 scripts/mirror.py verify
+
 .PHONY: transfer-log
 transfer-log: ## Show recent upstream transfers
 	@tail -40 data/transfer.log 2>/dev/null || echo "no transfers logged yet"
