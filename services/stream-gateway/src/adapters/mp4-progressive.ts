@@ -63,8 +63,17 @@ export class Mp4ProgressiveAdapter implements SourceAdapter {
     return this.cfg.publisher.rtspUrl(camera.id);
   }
 
+  /**
+   * A consumer starts watching. Refcounted: the first subscriber opens the single upstream
+   * connection, and it closes on an idle timeout after the last one leaves.
+   */
   async ensureStarted(camera: CameraSource): Promise<void> {
-    await this.cfg.publisher.ensureStarted(camera);
+    await this.cfg.publisher.acquire(camera);
+  }
+
+  /** A consumer stops watching. Does not tear the stream down while others are still attached. */
+  release(camera: CameraSource): void {
+    this.cfg.publisher.release(camera.id);
   }
 
   async stop(camera: CameraSource): Promise<void> {
