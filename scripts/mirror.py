@@ -203,6 +203,42 @@ def mirror_full(cam: Camera, expected: int | None) -> bool:
     return False
 
 
+
+def verify_clip(path: Path, requested_s: int) -> tuple[bool, str]:
+    """
+    Confirm a captured clip actually contains video.
+
+    ffmpeg returns 0 for a seek past usable data and writes a header-only container, so file size
+    alone is not evidence of capture. We require a decodable video stream covering at least half
+    the requested window — a short clip is still useful, an empty one is a silent failure that
+    would only surface during the demo.
+    """
+    if not path.exists() or path.stat().st_size < 100_000:
+        return False, f"file too small ({path.stat().st_size if path.exists() else 0} bytes)"
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=codec_type,nb_read_packets",
+         "-show_entries", "format=duration",
+         "-count_packets", "-read_intervals", "%+#1",
+         "-of", "default=nw=1", str(path)],
+        capture_output=True, text=True, timeout=180,
+    )
+    if out.returncode != 0:
+        return False, "unreadable (no moov / corrupt)"
+    fields = dict(
+        line.split("=", 1) for line in out.stdout.strip().split("\n") if "=" in line
+    )
+    if fields.get("codec_type") != "video":
+        return False, "no video stream"
+    try:
+        duration = float(fields.get("duration", 0))
+    except ValueError:
+        duration = 0.0
+    if duration < requested_s * 0.5:
+        return False, f"only {duration:.0f}s of the {requested_s}s requested"
+    return True, f"{duration:.0f}s decodable"
+
+
 def mirror_window(cam: Camera, at: int, duration: int, tag: str) -> bool:
     """Cut a time slice with ffmpeg stream-copy. Much cheaper than a full file for sampling."""
     dest = MIRROR_DIR / f"cam_{cam.id}_{tag}.mp4"
@@ -228,13 +264,18 @@ def mirror_window(cam: Camera, at: int, duration: int, tag: str) -> bool:
             capture_output=True, text=True,
         )
         size = dest.stat().st_size if dest.exists() else 0
-        if proc.returncode == 0 and size > 0:
+        # ffmpeg exits 0 even when a deep seek yields no frames, leaving a valid-but-empty
+        # container. Camera 8 produced exactly that: a 262-byte MP4 counted as a success.
+        # A clip is only "captured" if it actually decodes and covers most of the request.
+        ok, detail = verify_clip(dest, duration)
+        if proc.returncode == 0 and ok:
             print(f"    {tag} ok {human(size)} in {(time.time()-started)/60:.1f}min "
-                  f"(shows {recorded_time_for(at)})")
-            log("window_complete", camera=cam.id, tag=tag, bytes=size)
+                  f"(shows {recorded_time_for(at)}, {detail})")
+            log("window_complete", camera=cam.id, tag=tag, bytes=size, detail=detail)
             return True
 
-        print(f"    attempt {attempt+1} failed ({proc.stderr.strip()[:120]})")
+        reason = detail if not ok else proc.stderr.strip()[:120]
+        print(f"    attempt {attempt+1} failed ({reason})")
         log("window_retry", camera=cam.id, tag=tag, attempt=attempt + 1,
             stderr=proc.stderr.strip()[:200])
         dest.unlink(missing_ok=True)
