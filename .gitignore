@@ -52,3 +52,8 @@ test-results/
 .cache/
 models/
 .venv/
+
+# Copied from node_modules by apps/web/scripts/copy-maplibre-worker.mjs on every build.
+# The offline basemap next to it (public/map/) IS committed — it is generated once, online.
+apps/web/public/maplibre/
+apps/web/.screenshots/

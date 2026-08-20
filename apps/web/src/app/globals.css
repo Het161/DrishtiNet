@@ -1,0 +1,230 @@
+@import 'tailwindcss';
+
+/* Self-hosted fonts. Every face ships in node_modules and is bundled at build time — nothing is
+   fetched from Google Fonts, because the demo machine has no internet. */
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource/noto-sans-gujarati/400.css';
+@import '@fontsource/noto-sans-gujarati/600.css';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Design tokens — the single source of colour, type, spacing and motion.
+   Never hardcode a hex anywhere else in the app.
+   ────────────────────────────────────────────────────────────────────────── */
+@theme {
+  /* Surfaces — dark ops/SOC */
+  --color-base: #0b0e14;
+  --color-surface: #121722;
+  --color-elevated: #1b2230;
+  --color-border: #232c3d;
+
+  /* Text */
+  --color-text: #e6eaf2;
+  --color-muted: #8a93a6;
+
+  /* Accents */
+  --color-saffron: #ff8a3d;
+  --color-teal: #2dd4bf;
+
+  /* Alert priorities */
+  --color-critical: #ef4444;
+  --color-high: #f59e0b;
+  --color-medium: #3b82f6;
+  --color-low: #64748b;
+
+  /* Camera health — deliberately distinct from alert priorities so an operator never
+     confuses "this camera is broken" with "this alert is urgent". */
+  --color-online: #2dd4bf;
+  --color-degraded: #f59e0b;
+  --color-offline: #64748b;
+  --color-unverified: #8a93a6;
+
+  /* Type scale 12/14/16/20/24/32/48 */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-3xl: 3rem;
+
+  /* Spacing 4/8/12/16/24/32/48 */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-12: 48px;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Fonts */
+  --font-sans: 'Inter Variable', 'Noto Sans Gujarati', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --font-gujarati: 'Noto Sans Gujarati', 'Inter Variable', sans-serif;
+}
+
+:root {
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 250ms;
+  --ease-out: cubic-bezier(0.2, 0.8, 0.3, 1);
+  color-scheme: dark;
+}
+
+/* Accessibility is not optional: WCAG 2.1 AA + GIGW. A control room runs for twelve hours;
+   motion that cannot be turned off is a hazard, not a flourish. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-base);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Gujarati needs slightly more line height than Latin at the same size or the matras collide. */
+:lang(gu) {
+  font-family: var(--font-gujarati);
+  line-height: 1.7;
+}
+
+/* Keyboard focus must always be visible — operators work this UI by keyboard under pressure. */
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   3D buttons via CSS only.
+   Operational pages get NO WebGL background; depth here is layered shadows and
+   a translate on :active, which costs the GPU nothing while video is decoding.
+   ────────────────────────────────────────────────────────────────────────── */
+.btn3d {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 10px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: linear-gradient(180deg, var(--color-elevated), var(--color-surface));
+  color: var(--color-text);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transform: translateY(0);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 6%) inset,
+    0 2px 0 var(--color-border),
+    0 4px 12px rgb(0 0 0 / 45%);
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    background var(--motion-fast) var(--ease-out);
+}
+
+.btn3d:hover {
+  background: linear-gradient(180deg, #202839, var(--color-elevated));
+}
+
+.btn3d:active {
+  transform: translateY(2px);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 4%) inset,
+    0 0 0 var(--color-border),
+    0 1px 4px rgb(0 0 0 / 40%);
+}
+
+.btn3d[data-variant='primary'] {
+  border-color: color-mix(in srgb, var(--color-saffron) 45%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-saffron) 22%, var(--color-elevated)),
+    color-mix(in srgb, var(--color-saffron) 10%, var(--color-surface))
+  );
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 10%) inset,
+    0 2px 0 color-mix(in srgb, var(--color-saffron) 35%, transparent),
+    0 6px 18px rgb(255 138 61 / 18%);
+}
+
+.btn3d:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Panels */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* MapLibre overrides so the map reads as part of the SOC surface, not a bolted-on widget. */
+.maplibregl-map {
+  font-family: var(--font-sans) !important;
+  background: var(--color-base) !important;
+}
+.maplibregl-ctrl-group {
+  background: var(--color-elevated) !important;
+  border: 1px solid var(--color-border) !important;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--color-border) !important;
+}
+.maplibregl-ctrl-group button span {
+  filter: invert(1) opacity(0.8);
+}
+.maplibregl-popup-content {
+  background: var(--color-elevated) !important;
+  color: var(--color-text) !important;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm) !important;
+  padding: var(--spacing-3) !important;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 55%);
+}
+.maplibregl-popup-tip {
+  border-top-color: var(--color-elevated) !important;
+  border-bottom-color: var(--color-elevated) !important;
+}
+.maplibregl-ctrl-attrib {
+  background: rgb(11 14 20 / 80%) !important;
+  color: var(--color-muted) !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--color-muted) !important;
+}

@@ -64,6 +64,18 @@ slot: ## Show the current slot position and what the footage is showing right no
 cameras: ## List the camera registry
 	@cd $(GATEWAY) && pnpm -s exec tsx src/cli.ts list
 
+.PHONY: e2e
+e2e: ## Run Playwright end-to-end tests (needs the web app running)
+	cd apps/web && PLAYWRIGHT_BROWSERS_PATH=$(ROOT)/.cache/playwright pnpm exec playwright test
+
+.PHONY: web
+web: ## Build and serve the web app against the local database
+	cd apps/web && pnpm build && pnpm start
+
+.PHONY: basemap
+basemap: ## Rebuild the offline Gujarat basemap (needs internet; output is committed)
+	python3 scripts/build_basemap.py
+
 .PHONY: check
 check: typecheck test ## Typecheck + test (run before every commit)
 
