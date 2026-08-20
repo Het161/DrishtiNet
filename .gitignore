@@ -47,3 +47,8 @@ coverage/
 playwright-report/
 test-results/
 .lighthouseci/
+
+# in-repo caches (workspace rule: nothing outside the repo)
+.cache/
+models/
+.venv/
