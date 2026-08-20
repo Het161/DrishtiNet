@@ -1,0 +1,75 @@
+# MediaMTX configuration for DrishtiNet.
+#
+# Role: take the RTSP streams our ffmpeg publishers push in (one per camera, sourced from a single
+# upstream connection each — see services/stream-gateway/src/publisher.ts) and fan them out as:
+#   • WebRTC/WHEP  → the focused video-wall tile, sub-second glass-to-glass
+#   • RTSP         → the analytics workers
+#   • JPEG frames  → the 50-tile snapshot wall
+#   • LL-HLS       → fallback only, never the focused tile
+#
+# Paths are created on demand as `cam/{portal_id}`, so adding a camera needs no config change here.
+
+logLevel: info
+logDestinations: [stdout]
+
+# TCP only. UDP RTSP through Docker's NAT is a reliable source of "works on my machine" failures,
+# and at demo time a lost packet storm is not a debugging session we can afford.
+rtspTransports: [tcp]
+
+###############################################
+# RTSP — publishers in, analytics out
+###############################################
+rtsp: yes
+rtspAddress: :8554
+rtspEncryption: "no"
+
+###############################################
+# WebRTC (WHEP) — the browser path
+###############################################
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigin: '*'
+# Local-only deployment: no STUN/TURN, all traffic stays on the host/bridge network. This is a
+# feature, not a limitation — the venue is assumed to have no internet.
+webrtcICEServers2: []
+webrtcLocalUDPAddress: :8189
+webrtcIPsFromInterfaces: yes
+
+###############################################
+# HLS — fallback and thumbnails only
+###############################################
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigin: '*'
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsAlwaysRemux: no
+
+###############################################
+# Control API — used by stream-gateway for health and path state
+###############################################
+api: yes
+apiAddress: :9997
+
+# Playback of recorded segments is not used; evidence clips are cut by the analytics service and
+# stored in MinIO with a SHA-256 and a chain-of-custody row.
+playback: no
+metrics: no
+pprof: no
+
+###############################################
+# Paths
+###############################################
+pathDefaults:
+  # Our publishers push to these paths; MediaMTX must not try to pull a source itself.
+  source: publisher
+  # Do not hold the stream open once nothing is watching AND nothing is publishing.
+  sourceOnDemand: no
+  # Keep a short buffer so a WebRTC viewer joining mid-stream gets a keyframe quickly.
+  rtspTransport: tcp
+
+paths:
+  # Wildcard: cam/1 … cam/31 (and any future portal ids) are accepted without further config.
+  ~^cam/.*$:
+    source: publisher

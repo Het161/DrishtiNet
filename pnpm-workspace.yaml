@@ -1,0 +1,6 @@
+packages:
+  - 'apps/web'
+  - 'packages/*'
+  - 'services/alerts'
+  - 'services/integrations'
+  - 'services/stream-gateway'

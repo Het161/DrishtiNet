@@ -1,0 +1,26 @@
+{
+  "name": "drishtinet",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/**\" --filter \"./services/**\" dev",
+    "build": "pnpm -r build",
+    "check": "pnpm -r typecheck && pnpm -r test:run",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test:run",
+    "db:generate": "pnpm --filter @drishtinet/db generate",
+    "db:migrate": "pnpm --filter @drishtinet/db migrate",
+    "db:seed": "pnpm --filter @drishtinet/db seed",
+    "db:reset": "pnpm --filter @drishtinet/db reset",
+    "up": "docker compose -f infra/docker-compose.yml up -d --build",
+    "down": "docker compose -f infra/docker-compose.yml down",
+    "logs": "docker compose -f infra/docker-compose.yml logs -f"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,49 @@
+# deps
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# build
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# data / runtime
+infra/volumes/
+*.log
+.DS_Store
+
+# Government-provided footage and probe dumps NEVER get committed.
+# The written evidence report is the one exception — it is our audit trail for Phase 0.
+data/*
+!data/probe/
+data/probe/*
+!data/probe/REPORT.md
+
+# ml weights (downloaded at build time, never committed)
+*.pt
+*.onnx
+*.engine
+services/analytics/models/
+!services/analytics/models/.gitkeep
+
+# media fixtures (large) — regenerate with scripts/make-fixtures.sh
+services/stream-gateway/media/*.mp4
+services/stream-gateway/media/*.mkv
+
+# test output
+coverage/
+playwright-report/
+test-results/
+.lighthouseci/
