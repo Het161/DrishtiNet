@@ -19,6 +19,27 @@ UA="DrishtiNet-Sentinel2026/0.1 (Gujarat Police Innovation Challenge participant
 STAMP_UTC=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
 STAMP_IST=$(TZ=Asia/Kolkata date "+%Y-%m-%d %H:%M:%S IST")
 
+
+# macOS has no coreutils `timeout`, and both `nc` and `ffprobe` can sit on a filtered port far
+# longer than their own flags suggest. This wrapper guarantees every network call returns.
+with_timeout() {
+  local secs=$1; shift
+  "$@" &
+  local pid=$!
+  ( sleep "$secs"; kill -9 "$pid" 2>/dev/null ) 2>/dev/null &
+  local watcher=$!
+  wait "$pid" 2>/dev/null
+  local rc=$?
+  kill -9 "$watcher" 2>/dev/null
+  wait "$watcher" 2>/dev/null
+  return $rc
+}
+
+port_open() {
+  local host=$1 port=$2
+  with_timeout 10 nc -z -w 5 "$host" "$port" >/dev/null 2>&1
+}
+
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 bad()  { printf '  \033[31m✗\033[0m %s\n' "$*"; }
@@ -36,22 +57,37 @@ RTSP_OK=0; HLS_MASTER_OK=0; HLS_MEDIA_OK=0; WHEP_OK=0; API_OK=0
 
 # ── 0. Is the host reachable at all? ─────────────────────────────────────────
 bold "0. Discovery endpoint (port 443)"
-API_CODE=$(curl -sSL --max-time 20 -A "$UA" -o /dev/null -w '%{http_code}' \
-  "https://${HOST}/api/ingest" 2>/dev/null || echo "000")
+# The portal returns an intermittent 502/504 under load. One bad sample is not a routing
+# failure, and reporting it as one would send you chasing your own network for nothing.
+API_CODE="000"
+for attempt in 1 2 3; do
+  API_CODE=$(curl -sSL --max-time 20 -A "$UA" -o /dev/null -w '%{http_code}' \
+    "https://${HOST}/api/ingest" 2>/dev/null || echo "000")
+  [[ $API_CODE == 200 ]] && break
+  [[ $attempt -lt 3 ]] && { info "attempt ${attempt}: ${API_CODE} — retrying in 4s"; sleep 4; }
+done
 if [[ $API_CODE == 200 ]]; then
   API_OK=1; ok "GET /api/ingest -> 200"
   info "The host is reachable and the camera catalogue is readable."
 else
-  bad "GET /api/ingest -> ${API_CODE}"
-  info "If this fails, nothing below is meaningful — you have no route to the host at all."
+  bad "GET /api/ingest -> ${API_CODE} (after 3 attempts)"
+  if [[ $API_CODE == 502 || $API_CODE == 503 || $API_CODE == 504 ]]; then
+    info "That is the PORTAL failing, not your network — it returns 5xx intermittently."
+    info "Wait a few minutes and re-run; the checks below may be unreliable meanwhile."
+  else
+    info "If this fails, nothing below is meaningful — you have no route to the host at all."
+  fi
 fi
 echo
 
 # ── 1. RTSP on 8554 ──────────────────────────────────────────────────────────
 bold "1. RTSP (port 8554) — the inference path"
-if command -v nc >/dev/null && nc -z -G 8 "$HOST" 8554 2>/dev/null; then
+info "checking (up to 10s)…"
+if port_open "$HOST" 8554; then
   ok "TCP connect to ${HOST}:8554 succeeded"
-  if ffprobe -v error -rtsp_transport tcp -rw_timeout 15000000 \
+  info "probing the stream (up to 25s)…"
+  if with_timeout 25 ffprobe -v error -rtsp_transport tcp \
+       -timeout 15000000 \
        -i "rtsp://${HOST}:8554/stream/${CAM}" \
        -show_entries stream=codec_name,width,height -of default=nw=1 2>/dev/null; then
     RTSP_OK=1; ok "RTSP DESCRIBE + stream info succeeded"
@@ -92,7 +128,8 @@ echo
 
 # ── 3. WHEP on 8889 ──────────────────────────────────────────────────────────
 bold "3. WebRTC WHEP (port 8889) — the browser path"
-if command -v nc >/dev/null && nc -z -G 8 "$HOST" 8889 2>/dev/null; then
+info "checking (up to 10s)…"
+if port_open "$HOST" 8889; then
   ok "TCP connect to ${HOST}:8889 succeeded"
   WHEP_CODE=$(curl -sS --max-time 15 -A "$UA" -o /dev/null -w '%{http_code}' \
     -X OPTIONS "http://${HOST}:8889/stream/${CAM}/whep" 2>/dev/null || echo "000")
@@ -105,8 +142,13 @@ echo
 # ── verdict ──────────────────────────────────────────────────────────────────
 bold "What this means"
 if (( API_OK == 0 )); then
-  echo "  You have no route to ${HOST} at all. Check the hotspot has working internet,"
-  echo "  then re-run. Nothing else here is meaningful until this passes."
+  if [[ $API_CODE == 502 || $API_CODE == 503 || $API_CODE == 504 ]]; then
+    echo "  INCONCLUSIVE — the portal returned ${API_CODE} (a server-side error), so this run"
+    echo "  tells you nothing about your network. Wait a few minutes and run it again."
+  else
+    echo "  You have no route to ${HOST} at all. Check this network has working internet,"
+    echo "  then re-run. Nothing else here is meaningful until this passes."
+  fi
 elif (( RTSP_OK == 1 )); then
   echo "  RTSP WORKS FROM THIS NETWORK."
   echo
