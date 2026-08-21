@@ -56,9 +56,11 @@ const DEPARTMENTS = [
  * ~14 s across cameras 400 km apart.
  */
 const TIME_SYNC_READINGS = [
-  { portalId: '5', observed: '21:21:40', offsetS: -5, evidence: 'data/samples/cam_5.jpg' },
-  { portalId: '11', observed: '21:21:49', offsetS: 4, evidence: 'data/samples/cam_11.jpg' },
-  { portalId: '10', observed: '21:21:54', offsetS: 9, evidence: 'data/samples/cam_10.jpg' },
+  // Keyed by LABEL, not portal id — these anchors must stay attached to the camera they were
+  // measured from even after the portal renumbers everything.
+  { label: '05 Visat teen Rasta', observed: '21:21:40', offsetS: -5, evidence: 'data/fixtures/cam_5.jpg' },
+  { label: '11 dolatpara-junagadh', observed: '21:21:49', offsetS: 4, evidence: 'data/fixtures/cam_11.jpg' },
+  { label: '10 char-chowk-road-2-junagadh', observed: '21:21:54', offsetS: 9, evidence: 'data/fixtures/cam_10.jpg' },
 ] as const;
 
 interface MediaProbe {
@@ -183,8 +185,8 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
   const humanPlaced = new Set(
     (await prisma.camera.findMany({
       where: { locationSetBy: { not: null } },
-      select: { portalId: true },
-    })).map((c) => c.portalId),
+      select: { label: true },
+    })).map((c) => c.label),
   );
 
   let verified = 0;
@@ -192,9 +194,13 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
   let withGeom = 0;
 
   for (const c of cfg.cameras as Record<string, any>[]) {
-    const portalId = String(c.portal_id);
+    // Label is the identity. Portal ids are positional, get reused, and shifted wholesale on
+    // 2026-08-21 — keying on them would reattach one camera's research to another.
+    const label = String(c.label);
+    const portalId = c.portal_id == null ? null : String(c.portal_id);
     const data = {
-      label: String(c.label),
+      portalId,
+      lastPortalId: c.last_portal_id ?? null,
       labelNumber: c.label_number ?? null,
       name: String(c.name ?? c.label),
       district: c.district ?? null,
@@ -210,22 +216,22 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
     } satisfies Prisma.CameraUncheckedUpdateInput;
 
     const camera = await prisma.camera.upsert({
-      where: { portalId },
-      create: { portalId, ...data },
+      where: { label },
+      create: { label, ...data },
       // Deliberately does NOT touch departmentId: department assignment is an audited workflow,
       // and a re-seed must never silently undo a human's decision. The same applies to a position
       // set with the drag-to-place tool — `verified` rows keep their coordinates and radius.
-      update: humanPlaced.has(portalId)
-        ? { label: data.label, name: data.name, status: data.status,
+      update: humanPlaced.has(label)
+        ? { portalId: data.portalId, name: data.name, status: data.status,
             statusSource: data.statusSource, lastError: data.lastError,
             lastSeenAt: data.lastSeenAt }
         : data,
     });
-    ids.set(portalId, camera.id);
+    ids.set(label, camera.id);
 
     // geography must be written through raw SQL — Prisma cannot express the type.
     // A human-placed camera keeps its coordinates untouched.
-    if (humanPlaced.has(portalId)) {
+    if (humanPlaced.has(label)) {
       // leave geom alone
     } else if (c.lat != null && c.lng != null) {
       await prisma.$executeRaw`
@@ -241,17 +247,24 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
     if (data.locationStatus === 'unverified') unverified++;
 
     // Stream row, enriched with whatever we actually measured.
-    const probe = probes.get(portalId);
+    // Probe data predates the migration and is keyed by the old ids; absent for a released id.
+    const probe = portalId ? probes.get(portalId) : undefined;
     const existing = await prisma.stream.findFirst({ where: { cameraId: camera.id } });
     const streamData = {
       cameraId: camera.id,
-      sourceType: String(c.source_type) as Prisma.StreamUncheckedCreateInput['sourceType'],
-      sourceUrl: String(c.source_url),
+      sourceType: String(c.source_type ?? 'RTSP') as Prisma.StreamUncheckedCreateInput['sourceType'],
+      sourceUrl: String(c.source_url ?? ''),
+      // Stored verbatim from /api/ingest, never constructed: URL patterns are not the contract.
+      rtspUrl: c.rtsp_url ?? null,
+      webrtcUrl: c.webrtc_url ?? null,
+      hlsUrl: c.hls_live_url ?? null,
+      portalLive: c.portal_live ?? null,
+      bitrateKbps: c.bitrate_kbps ?? null,
       codec: probe?.codec ?? c.codec ?? null,
       container: c.container ?? null,
-      width: probe?.width ?? null,
-      height: probe?.height ?? null,
-      fps: probe?.actual_fps ?? null,
+      width: c.width ?? probe?.width ?? null,
+      height: c.height ?? probe?.height ?? null,
+      fps: c.fps ?? probe?.actual_fps ?? null,
       durationSeconds: probe?.duration_s ?? null,
       sizeBytes: probe?.size_bytes != null ? BigInt(probe.size_bytes) : null,
     };
@@ -272,7 +285,7 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
 async function seedTimeSync(cameraIds: Map<string, string>): Promise<void> {
   let n = 0;
   for (const r of TIME_SYNC_READINGS) {
-    const cameraId = cameraIds.get(r.portalId);
+    const cameraId = cameraIds.get(r.label);
     if (!cameraId) continue;
     const already = await prisma.timeSync.findFirst({
       where: { cameraId, measuredFrom: 'burned_in_clock', atPositionS: 1305 },
@@ -300,7 +313,7 @@ async function seedDepartmentSuggestions(
   try {
     const rows = parseCsv(await readFile(DEPT_SUGGESTIONS, 'utf8'));
     for (const row of rows) {
-      const cameraId = cameraIds.get(row.portal_id ?? '');
+      const cameraId = cameraIds.get(row.label ?? '');
       const slug = (row.suggested_department ?? '').toLowerCase();
       const departmentId = deptIds.get(slug);
       if (!cameraId || !departmentId) continue;

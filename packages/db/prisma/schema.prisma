@@ -103,11 +103,23 @@ enum StatusSource {
 
 model Camera {
   id           String  @id @default(cuid())
-  /// The portal's `id`. The ONLY safe key — the number inside the label is not unique
-  /// (portal 17 is labelled "17 Rajkot Bus Port CCTV", portal 18 is labelled "17 Rajkot CCTV").
-  portalId     String  @unique @map("portal_id")
+  /// The portal's current id — a POSITIONAL INDEX, not an identity.
+  ///
+  /// Nullable because ids are reused: when "17 Rajkot CCTV" left the roster on 2026-08-21, the id
+  /// it had held was immediately reassigned to a different camera. A departed camera therefore
+  /// releases its id (kept in `lastPortalId` as historical fact) rather than holding one that now
+  /// points at someone else. Postgres permits multiple NULLs under a unique index, which is
+  /// exactly the semantics wanted here.
+  portalId     String?  @unique @map("portal_id")
+  /// The id this camera held when it was last on the roster.
+  lastPortalId String?  @map("last_portal_id")
   /// Exact portal label, preserved verbatim.
-  label        String
+  ///
+  /// THIS is the stable identity, not `portalId`. On 2026-08-21 the portal removed one camera and
+  /// shifted every id above it down by one, silently repointing 14 ids at different physical
+  /// cameras. Labels survived that change unaltered and are unique across the roster, so every
+  /// sync reconciles by label and treats an id change as a rename.
+  label        String   @unique
   /// The number embedded in that label. Diverges from portalId after 17; may be absent.
   labelNumber  Int?    @map("label_number")
   name         String
@@ -174,7 +186,16 @@ model Stream {
   id           String     @id @default(cuid())
   cameraId     String     @map("camera_id")
   sourceType   SourceType @map("source_type")
+  /// Legacy progressive URL. Retained for the disabled-by-default fallback adapter only.
   sourceUrl    String     @map("source_url")
+  /// Live endpoints from /api/ingest. Stored, never constructed — URL patterns are not the
+  /// contract and the organisers are explicit that they may change.
+  rtspUrl      String?    @map("rtsp_url")
+  webrtcUrl    String?    @map("webrtc_url")
+  hlsUrl       String?    @map("hls_url")
+  /// Whether the portal currently reports this camera as live.
+  portalLive   Boolean?   @map("portal_live")
+  bitrateKbps  Int?       @map("bitrate_kbps")
   /// Low-resolution path for analytics, where the source offers one.
   substreamUrl String?    @map("substream_url")
   snapshotUrl  String?    @map("snapshot_url")
@@ -475,6 +496,26 @@ model EvidenceClip {
 
   @@index([sha256])
   @@map("evidence_clips")
+}
+
+/// Raw captures of the portal's discovery endpoint.
+///
+/// Kept because the roster is not stable: cameras appear, disappear, and — as on 2026-08-21 —
+/// shift ids underneath us. Without a snapshot history, "when did this camera change?" is
+/// unanswerable, and a silent repointing looks exactly like a correct sync.
+model ApiSnapshot {
+  id           String   @id @default(cuid())
+  endpoint     String
+  fetchedAt    DateTime @default(now()) @map("fetched_at")
+  cameraCount  Int      @map("camera_count")
+  /// SHA-256 of the normalised payload, so an unchanged roster is cheap to detect.
+  digest       String
+  payload      Json
+  /// Human-readable summary of what changed against the previous snapshot.
+  diffSummary  String?  @map("diff_summary")
+
+  @@index([endpoint, fetchedAt])
+  @@map("api_snapshots")
 }
 
 /// Generic system event log (pipeline lifecycle, ingest errors, slot rollovers).

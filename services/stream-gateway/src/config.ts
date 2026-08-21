@@ -31,6 +31,12 @@ export type StatusSource = 'measured' | 'portal_claim';
 
 export interface CameraConfigEntry extends CameraSource {
   label: string;
+  /** Current portal id, or null when the camera has left the roster and its id was released. */
+  portalId: string | null;
+  /** Live endpoints as published by /api/ingest. Stored, never constructed. */
+  rtspUrl: string | null;
+  webrtcUrl: string | null;
+  hlsUrl: string | null;
   labelNumber: number | null;
   district: string | null;
   /** Always 'unassigned' for the Sentinel feeds — the portal exposes no department field. */
@@ -89,11 +95,24 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
 
   const defaults = raw.defaults ?? {};
   const seen = new Set<string>();
+  const seenLabels = new Set<string>();
 
   const cameras: CameraConfigEntry[] = raw.cameras.map((c: Record<string, any>) => {
-    const id = String(req(c.portal_id, 'portal_id', c.label));
-    if (seen.has(id)) throw new Error(`duplicate portal_id "${id}" in ${path}`);
-    seen.add(id);
+    // The LABEL is the identity, not the id. Portal ids are positional, get reused when a camera
+    // leaves, and shifted wholesale on 2026-08-21 — so a camera absent from the roster carries a
+    // null portal_id and is addressed by a label-derived key instead.
+    const label = String(req(c.label, 'label', c.portal_id));
+    if (seenLabels.has(label)) throw new Error(`duplicate label "${label}" in ${path}`);
+    seenLabels.add(label);
+
+    const portalId = c.portal_id === null || c.portal_id === undefined
+      ? null
+      : String(c.portal_id);
+    if (portalId !== null) {
+      if (seen.has(portalId)) throw new Error(`duplicate portal_id "${portalId}" in ${path}`);
+      seen.add(portalId);
+    }
+    const id = portalId ?? `offline:${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
     const sourceType = String(c.source_type ?? defaults.source_type ?? '');
     if (!VALID_SOURCE_TYPES.has(sourceType)) {
@@ -140,10 +159,14 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
     return {
       id,
       name: String(c.name ?? c.label ?? `Camera ${id}`),
-      label: String(req(c.label, 'label', id)),
+      label,
       labelNumber: c.label_number ?? null,
       sourceType: sourceType as SourceType,
-      sourceUrl: String(req(c.source_url, 'source_url', id)),
+      sourceUrl: String(c.source_url ?? `/stream/${portalId ?? ''}`),
+      portalId,
+      rtspUrl: c.rtsp_url ?? null,
+      webrtcUrl: c.webrtc_url ?? null,
+      hlsUrl: c.hls_live_url ?? null,
       durationSeconds: c.duration_seconds ?? null,
       codec: c.codec ?? null,
       container: c.container ?? null,

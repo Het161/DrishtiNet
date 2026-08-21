@@ -28,12 +28,12 @@
 # 21:00 IST. Our stream-gateway reproduces exactly this arithmetic server-side.
 
 meta:
-  source: https://live.sentinelgujarat.in
+  source: https://live.corp8.cloud
   list_api: /api/cameras
   state_api: /api/cameras/{id}/state
   stream_path: /stream/{id}
   discovered_at: '2026-08-20T20:52:00+05:30'
-  camera_count: 31
+  camera_count: 30
   # From /api/cameras/{id}/state — identical across every camera we sampled.
   slot_seconds: 43200
   slot_boundaries_ist: ['09:00:00', '21:00:00']
@@ -43,8 +43,9 @@ meta:
   # Label numbers 21,22,24,25,26,27,29,31,32 are absent: the original deployment was larger than
   # what is currently published. The FAQ's "~50" and today's 31 will not match. Expect churn.
   missing_label_numbers: [21, 22, 24, 25, 26, 27, 29, 31, 32]
-  last_synced: '2026-08-20T21:14:48+05:30'
+  last_synced: '2026-08-21T22:25:11+05:30'
 
+  discovery_endpoint: /api/ingest
 defaults:
   source_type: MP4_PROGRESSIVE
   department: unassigned
@@ -59,7 +60,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/1
     lat: 23.075
     lng: 72.600
@@ -69,13 +70,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
     location_basis: Chimanbhai Patel Bridge — identifiable bridge approach
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/1
+    webrtc_url: http://live.corp8.cloud:8889/stream/1/whep
+    hls_live_url: /live/stream/1/index.m3u8
   - portal_id: '2'
     label: '02 Janpath'
     label_number: 2
@@ -83,7 +88,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/2
     lat:
     lng:
@@ -93,13 +98,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: measured
     location_basis: no position — shown at district centroid
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/2
+    webrtc_url: http://live.corp8.cloud:8889/stream/2/whep
+    hls_live_url: /live/stream/2/index.m3u8
   - portal_id: '3'
     label: '03 O.N.G.C. Office'
     label_number: 3
@@ -107,7 +116,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/3
     lat: 23.110
     lng: 72.600
@@ -117,13 +126,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
     location_basis: ONGC Office, Chandkheda — named frontage
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/3
+    webrtc_url: http://live.corp8.cloud:8889/stream/3/whep
+    hls_live_url: /live/stream/3/index.m3u8
   - portal_id: '4'
     label: '04 Paldi Circle'
     label_number: 4
@@ -131,7 +144,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/4
     lat: 23.012
     lng: 72.564
@@ -141,13 +154,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
     location_basis: Paldi Circle — named circle
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/4
+    webrtc_url: http://live.corp8.cloud:8889/stream/4/whep
+    hls_live_url: /live/stream/4/index.m3u8
   - portal_id: '5'
     label: '05 Visat teen Rasta'
     label_number: 5
@@ -155,7 +172,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/5
     lat: 23.108
     lng: 72.589
@@ -165,13 +182,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
     location_basis: Visat Teen Rasta — named three-way junction
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/5
+    webrtc_url: http://live.corp8.cloud:8889/stream/5/whep
+    hls_live_url: /live/stream/5/index.m3u8
   - portal_id: '6'
     label: '06 Timbavadi gate-Junagadh'
     label_number: 6
@@ -179,7 +200,7 @@ cameras:
     district: Junagadh
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/6
     lat: 21.499
     lng: 70.470
@@ -187,17 +208,25 @@ cameras:
     # AVI container — needs a transcode leg in the gateway, see data/probe/REPORT.md
     notes: non-H.264 source container
 
-    codec: avi
+    codec: hevc
     container: avi
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: offline
     last_error: HTTP 500 from origin (AVI container), measured 2026-08-20
     status_source: measured
     location_basis: Timbawadi Gate — named gate
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 25.0
+    bitrate_kbps: 1923
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/6
+    webrtc_url: http://live.corp8.cloud:8889/stream/6/whep
+    hls_live_url: /live/stream/6/index.m3u8
   - portal_id: '7'
     label: '07 hero-showroom-gir-somnath'
     label_number: 7
@@ -205,7 +234,7 @@ cameras:
     district: Gir Somnath
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/7
     lat: 20.910
     lng: 70.370
@@ -215,13 +244,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 2500
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Gir Somnath — Veraval assumed, town-scale uncertainty
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/7
+    webrtc_url: http://live.corp8.cloud:8889/stream/7/whep
+    hls_live_url: /live/stream/7/index.m3u8
   - portal_id: '8'
     label: '08 majewadi-gate-junagadh'
     label_number: 8
@@ -229,7 +262,7 @@ cameras:
     district: Junagadh
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/8
     lat: 21.530
     lng: 70.462
@@ -239,13 +272,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Majevadi Gate — named gate
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/8
+    webrtc_url: http://live.corp8.cloud:8889/stream/8/whep
+    hls_live_url: /live/stream/8/index.m3u8
   - portal_id: '9'
     label: '09 new-bypass-near-by-circle-junagadh-2'
     label_number: 9
@@ -253,7 +290,7 @@ cameras:
     district: Junagadh
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/9
     lat:
     lng:
@@ -263,13 +300,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/9
+    webrtc_url: http://live.corp8.cloud:8889/stream/9/whep
+    hls_live_url: /live/stream/9/index.m3u8
   - portal_id: '10'
     label: '10 char-chowk-road-2-junagadh'
     label_number: 10
@@ -277,7 +318,7 @@ cameras:
     district: Junagadh
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/10
     lat: 21.521
     lng: 70.458
@@ -287,13 +328,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
     location_basis: Char Chowk — named four-way junction
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/10
+    webrtc_url: http://live.corp8.cloud:8889/stream/10/whep
+    hls_live_url: /live/stream/10/index.m3u8
   - portal_id: '11'
     label: '11 dolatpara-junagadh'
     label_number: 11
@@ -301,7 +346,7 @@ cameras:
     district: Junagadh
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/11
     lat: 21.555
     lng: 70.445
@@ -311,13 +356,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Dolatpara GIDC — named industrial estate gate
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/11
+    webrtc_url: http://live.corp8.cloud:8889/stream/11/whep
+    hls_live_url: /live/stream/11/index.m3u8
   - portal_id: '12'
     label: '12 Tri Mandir Adalaj Tollnaka'
     label_number: 12
@@ -325,7 +374,7 @@ cameras:
     district: Gandhinagar
     department: unassigned
     department_guess: Police / toll operator
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/12
     lat: 23.165
     lng: 72.580
@@ -335,13 +384,17 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Adalaj Trimandir toll plaza — fixed structure
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/12
+    webrtc_url: http://live.corp8.cloud:8889/stream/12/whep
+    hls_live_url: /live/stream/12/index.m3u8
   - portal_id: '13'
     label: '13 CN Vidhyalaya'
     label_number: 13
@@ -349,7 +402,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Municipal Corporation (AMC)
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/13
     lat: 23.026
     lng: 72.555
@@ -359,13 +412,21 @@ cameras:
     container: mkv
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
     location_basis: C. N. Vidyalaya — named school frontage
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 12.5
+    bitrate_kbps: 902
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/13
+    webrtc_url: http://live.corp8.cloud:8889/stream/13/whep
+    hls_live_url: /live/stream/13/index.m3u8
   - portal_id: '14'
     label: '14 Delight'
     label_number: 14
@@ -373,7 +434,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess:
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/14
     lat:
     lng:
@@ -383,13 +444,21 @@ cameras:
     container: mkv
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 12.5
+    bitrate_kbps: 980
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/14
+    webrtc_url: http://live.corp8.cloud:8889/stream/14/whep
+    hls_live_url: /live/stream/14/index.m3u8
   - portal_id: '15'
     label: '15 Suvidha park'
     label_number: 15
@@ -397,7 +466,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess:
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/15
     lat:
     lng:
@@ -407,13 +476,21 @@ cameras:
     container: mkv
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 12.5
+    bitrate_kbps: 690
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/15
+    webrtc_url: http://live.corp8.cloud:8889/stream/15/whep
+    hls_live_url: /live/stream/15/index.m3u8
   - portal_id: '16'
     label: '16 Visat P2'
     label_number: 16
@@ -421,7 +498,7 @@ cameras:
     district: Ahmedabad
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/16
     lat: 23.108
     lng: 72.589
@@ -432,13 +509,21 @@ cameras:
     container: mkv
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Visat P2 — second angle on the Visat junction
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 12.5
+    bitrate_kbps: 961
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/16
+    webrtc_url: http://live.corp8.cloud:8889/stream/16/whep
+    hls_live_url: /live/stream/16/index.m3u8
   - portal_id: '17'
     label: '17 Rajkot Bus Port CCTV'
     label_number: 17
@@ -446,24 +531,32 @@ cameras:
     district: Rajkot
     department: unassigned
     department_guess: GSRTC
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/17
     lat: 22.296
     lng: 70.792
     cluster: rajkot
 
-    codec: h264
+    codec: hevc
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 1500
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Rajkot Bus Port — terminal footprint
-  - portal_id: '18'
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 24.98
+    bitrate_kbps: 671
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/17
+    webrtc_url: http://live.corp8.cloud:8889/stream/17/whep
+    hls_live_url: /live/stream/17/index.m3u8
+  - portal_id:
     label: '17 Rajkot CCTV'
     label_number: 17
     name: Rajkot CCTV (17)
@@ -475,7 +568,9 @@ cameras:
     lat:
     lng:
     cluster: rajkot
-    notes: label_number collides with portal_id 17 — portal_id is the only safe key
+    notes: label_number collides with portal_id 17 — portal_id is the only safe key; left the portal
+      roster on 2026-08-21T22:24:05+05:30; left the portal roster on 2026-08-21T22:25:11+05:30; 
+      portal_id released (was 18)
 
     codec: h264
     container: mp4
@@ -484,19 +579,21 @@ cameras:
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
-    status: online
-    last_error:
-    status_source: portal_claim
+    status: offline
+    last_error: absent from /api/ingest since 2026-08-21T22:25:11+05:30
+    status_source: measured
     location_basis: no position — shown at district centroid
-  - portal_id: '19'
+    portal_live: false
+    last_portal_id: '18'
+  - portal_id: '18'
     label: '18 Rajkot CCTV'
     label_number: 18
     name: Rajkot CCTV (18)
     district: Rajkot
     department: unassigned
     department_guess: GSRTC / Municipal
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/19
+    source_type: RTSP
+    source_url: /stream/18
     lat:
     lng:
     cluster: rajkot
@@ -505,22 +602,26 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
-  - portal_id: '20'
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/18
+    webrtc_url: http://live.corp8.cloud:8889/stream/18/whep
+    hls_live_url: /live/stream/18/index.m3u8
+  - portal_id: '19'
     label: '19 KHAPARIA GRAM PANCHAYAT , TALUKA GANDEVI, DISTRICT NAVSARI'
     label_number: 19
     name: Khaparia Gram Panchayat, Gandevi
     district: Navsari
     department: unassigned
     department_guess: Panchayat
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/20
+    source_type: RTSP
+    source_url: /stream/19
     lat: 20.820
     lng: 72.980
     cluster: navsari
@@ -529,22 +630,26 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: measured
     location_basis: Khaparia village, Gandevi taluka
-  - portal_id: '21'
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/19
+    webrtc_url: http://live.corp8.cloud:8889/stream/19/whep
+    hls_live_url: /live/stream/19/index.m3u8
+  - portal_id: '20'
     label: '20 Mohanpura'
     label_number: 20
     name: Mohanpura
     district:
     department: unassigned
     department_guess:
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/21
+    source_type: RTSP
+    source_url: /stream/20
     lat:
     lng:
     cluster:
@@ -554,22 +659,26 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
-  - portal_id: '22'
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/20
+    webrtc_url: http://live.corp8.cloud:8889/stream/20/whep
+    hls_live_url: /live/stream/20/index.m3u8
+  - portal_id: '21'
     label: '23 Patan Dethali Char Rasta'
     label_number: 23
     name: Dethali Char Rasta, Patan
     district: Patan
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/22
+    source_type: RTSP
+    source_url: /stream/21
     lat: 23.850
     lng: 72.130
     cluster: north-gujarat
@@ -578,47 +687,59 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Dethali Char Rasta — named four-way junction
-  - portal_id: '23'
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/21
+    webrtc_url: http://live.corp8.cloud:8889/stream/21/whep
+    hls_live_url: /live/stream/21/index.m3u8
+  - portal_id: '22'
     label: '28 BK Mervada tran Rasta'
     label_number: 28
     name: Mervada Three Roads, Banaskantha
     district: Banaskantha
     department: unassigned
     department_guess: Police
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/23
+    source_type: RTSP
+    source_url: /stream/22
     lat:
     lng:
     cluster: north-gujarat
     notes: non-H.264 source container
 
-    codec: avi
+    codec: hevc
     container: avi
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: degraded
     last_error: AVI container; range-seek not yet verified
     status_source: measured
     location_basis: no position — shown at district centroid
-  - portal_id: '24'
+    portal_live: true
+    width: 1920
+    height: 1080
+    fps: 25.0
+    bitrate_kbps: 2091
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/22
+    webrtc_url: http://live.corp8.cloud:8889/stream/22/whep
+    hls_live_url: /live/stream/22/index.m3u8
+  - portal_id: '23'
     label: '30 kheram'
     label_number: 30
     name: Kheram
     district:
     department: unassigned
     department_guess:
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/24
+    source_type: RTSP
+    source_url: /stream/23
     lat:
     lng:
     cluster:
@@ -627,22 +748,30 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
-  - portal_id: '25'
+    portal_live: true
+    width: 1280
+    height: 720
+    fps: 25.0
+    bitrate_kbps: 4001
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/23
+    webrtc_url: http://live.corp8.cloud:8889/stream/23/whep
+    hls_live_url: /live/stream/23/index.m3u8
+  - portal_id: '24'
     label: '33 dehgam'
     label_number: 33
     name: Dehgam
     district: Gandhinagar
     department: unassigned
     department_guess: Police / Municipality
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/25
+    source_type: RTSP
+    source_url: /stream/24
     lat: 23.170
     lng: 72.810
     cluster: gandhinagar-east
@@ -651,22 +780,26 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Dehgam town
-  - portal_id: '26'
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/24
+    webrtc_url: http://live.corp8.cloud:8889/stream/24/whep
+    hls_live_url: /live/stream/24/index.m3u8
+  - portal_id: '25'
     label: '34 dhanori'
     label_number: 34
     name: Dhanori
     district:
     department: unassigned
     department_guess:
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/26
+    source_type: RTSP
+    source_url: /stream/25
     lat:
     lng:
     cluster:
@@ -675,45 +808,89 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
-  - portal_id: '27'
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/25
+    webrtc_url: http://live.corp8.cloud:8889/stream/25/whep
+    hls_live_url: /live/stream/25/index.m3u8
+  - portal_id: '26'
     label: '35 TANKAL'
     label_number: 35
     name: Tankal
     district: Navsari
     department: unassigned
     department_guess: Panchayat
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/27
+    source_type: RTSP
+    source_url: /stream/26
     lat:
     lng:
     cluster: navsari
 
-    codec: h264
+    codec: hevc
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: unverified
     location_uncertainty_m: 15000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: no position — shown at district centroid
-  - portal_id: '28'
+    portal_live: true
+    width: 2560
+    height: 1440
+    fps: 13.35
+    bitrate_kbps: 2411
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/26
+    webrtc_url: http://live.corp8.cloud:8889/stream/26/whep
+    hls_live_url: /live/stream/26/index.m3u8
+  - portal_id: '27'
     label: '36 bilimora'
     label_number: 36
     name: Bilimora (36)
     district: Navsari
     department: unassigned
     department_guess: Municipality / Panchayat
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
+    source_url: /stream/27
+    lat: 20.770
+    lng: 72.960
+    cluster: navsari
+
+    codec: h264
+    container: mp4
+    delivery: progressive
+    portal_status: live
+    last_seen: '2026-08-21T22:25:11+05:30'
+    location_status: approximate
+    location_uncertainty_m: 2000
+    status: online
+    last_error:
+    status_source: portal_claim
+    location_basis: Bilimora town
+    portal_live: true
+    width: 1280
+    height: 960
+    fps: 24.86
+    bitrate_kbps: 1112
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/27
+    webrtc_url: http://live.corp8.cloud:8889/stream/27/whep
+    hls_live_url: /live/stream/27/index.m3u8
+  - portal_id: '28'
+    label: '37 bilimora'
+    label_number: 37
+    name: Bilimora (37)
+    district: Navsari
+    department: unassigned
+    department_guess: Municipality / Panchayat
+    source_type: RTSP
     source_url: /stream/28
     lat: 20.770
     lng: 72.960
@@ -723,21 +900,25 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Bilimora town
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/28
+    webrtc_url: http://live.corp8.cloud:8889/stream/28/whep
+    hls_live_url: /live/stream/28/index.m3u8
   - portal_id: '29'
-    label: '37 bilimora'
-    label_number: 37
-    name: Bilimora (37)
+    label: '38 bilimora'
+    label_number: 38
+    name: Bilimora (38)
     district: Navsari
     department: unassigned
     department_guess: Municipality / Panchayat
-    source_type: MP4_PROGRESSIVE
+    source_type: RTSP
     source_url: /stream/29
     lat: 20.770
     lng: 72.960
@@ -747,46 +928,30 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
     location_basis: Bilimora town
+    portal_live: true
+    width: 1280
+    height: 960
+    fps: 24.78
+    bitrate_kbps: 907
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/29
+    webrtc_url: http://live.corp8.cloud:8889/stream/29/whep
+    hls_live_url: /live/stream/29/index.m3u8
   - portal_id: '30'
-    label: '38 bilimora'
-    label_number: 38
-    name: Bilimora (38)
-    district: Navsari
-    department: unassigned
-    department_guess: Municipality / Panchayat
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/30
-    lat: 20.770
-    lng: 72.960
-    cluster: navsari
-
-    codec: h264
-    container: mp4
-    delivery: progressive
-    portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
-    location_status: approximate
-    location_uncertainty_m: 2000
-    status: online
-    last_error:
-    status_source: portal_claim
-    location_basis: Bilimora town
-  - portal_id: '31'
     label: Gandhidham Rambaugh p2
     label_number:
     name: Rambaugh, Gandhidham
     district: Kutch
     department: unassigned
     department_guess: Police / Municipal
-    source_type: MP4_PROGRESSIVE
-    source_url: /stream/31
+    source_type: RTSP
+    source_url: /stream/30
     lat: 23.080
     lng: 70.130
     cluster: kutch
@@ -795,10 +960,14 @@ cameras:
     container: mp4
     delivery: progressive
     portal_status: live
-    last_seen: '2026-08-20T21:14:48+05:30'
+    last_seen: '2026-08-21T22:25:11+05:30'
     location_status: approximate
     location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: measured
     location_basis: Gandhidham Rambaugh area
+    portal_live: true
+    rtsp_url: rtsp://live.corp8.cloud:8554/stream/30
+    webrtc_url: http://live.corp8.cloud:8889/stream/30/whep
+    hls_live_url: /live/stream/30/index.m3u8
