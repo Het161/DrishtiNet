@@ -6,6 +6,26 @@ import type { NextConfig } from 'next';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, '../..');
 
+/**
+ * Load the repository-root `.env`.
+ *
+ * Next only auto-loads `.env` from the app directory, but this is a monorepo with ONE `.env` at the
+ * root — shared by the gateway, Prisma, docker-compose and the Makefile. Without this, `next dev`
+ * starts with no DATABASE_URL and every registry query fails at request time, while `make web-dev`
+ * works because it sources the file first. Making the app load its own configuration removes that
+ * difference: every entry point behaves the same.
+ *
+ * `loadEnvFile` does not overwrite variables that are already set, so an explicit environment still
+ * wins — which is what containers rely on. In Docker there is no root `.env` to find and the values
+ * arrive through env_file, hence the tolerated miss rather than a hard failure.
+ */
+try {
+  process.loadEnvFile(resolve(REPO_ROOT, '.env'));
+} catch {
+  // Absent or unreadable. Expected inside the container; elsewhere the missing variable surfaces
+  // at first use with a clearer message than anything we could raise here.
+}
+
 const nextConfig: NextConfig = {
   // Self-hosted, offline, one container. Never Vercel.
   output: 'standalone',

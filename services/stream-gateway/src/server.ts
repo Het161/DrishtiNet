@@ -39,6 +39,15 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '../../..');
 
+// The one `.env` at the repository root, shared with the web app, Prisma and docker-compose.
+// Read before the constants below, so `npm run dev` and `make` see identical configuration.
+// Already-set variables win, so a container's env_file still overrides this.
+try {
+  process.loadEnvFile(resolve(ROOT, '.env'));
+} catch {
+  // Absent in the container, where configuration arrives through env_file instead.
+}
+
 const PORT = Number(process.env.STREAM_GATEWAY_PORT ?? 4001);
 const CAMERAS_CONFIG = process.env.CAMERAS_CONFIG ?? resolve(ROOT, 'config/cameras.yaml');
 
