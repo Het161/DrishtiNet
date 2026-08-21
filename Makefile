@@ -97,22 +97,25 @@ check: typecheck test ## Typecheck + test (run before every commit)
 proxy: ## Run the caching range proxy (required for deep seeks into portal files)
 	@cd $(GATEWAY) && pnpm -s exec tsx src/range-proxy-server.ts
 
-.PHONY: probe
-probe: ## Probe unprobed cameras, moov-only. IDS=9,12,13 make probe
-	@test -n "$(IDS)" || (echo "usage: make probe IDS=9,12,13" && exit 1)
-	python3 scripts/probe_mp4.py --ids $(IDS) --out data/probe/media_probe_$(shell date +%Y%m%d_%H%M%S).json
-
 .PHONY: sync-registry
-sync-registry: ## Sync config/cameras.yaml against the portal roster (never deletes)
+sync-registry: ## Sync the registry from /api/ingest, reconciling by label (never deletes)
 	$(PY) scripts/sync_registry.py
 
-.PHONY: capture
-capture: ## Capture daylight + night windows for the demo cameras (needs `make proxy`)
-	./scripts/capture_demo_windows.sh
+.PHONY: selftest-up
+selftest-up: ## Start the local MediaMTX self-test grid (no organiser network involved)
+	./scripts/selftest_grid.sh up
 
-.PHONY: verify-mirror
-verify-mirror: ## Audit data/mirror: which captured clips actually decode
-	python3 scripts/mirror.py verify
+.PHONY: selftest-down
+selftest-down: ## Stop the local self-test grid
+	./scripts/selftest_grid.sh down
+
+.PHONY: conformance
+conformance: ## Run the §4 conformance suite against the local self-test grid — the real-grid gate
+	@cd $(GATEWAY) && pnpm exec vitest run --config vitest.conformance.config.ts
+
+.PHONY: fixtures
+fixtures: ## Audit data/fixtures: which offline development clips actually decode
+	python3 tools/legacy-progressive/mirror.py verify
 
 .PHONY: transfer-log
 transfer-log: ## Show recent upstream transfers
@@ -143,7 +146,7 @@ clean-data: ## Delete ALL government footage and derived data (data/ except the 
 	@echo "This deletes every mirrored clip, sample and index under data/."
 	@echo "data/probe/REPORT.md is preserved."
 	@read -p "Type 'delete' to confirm: " ans && [ "$$ans" = "delete" ] || (echo "aborted"; exit 1)
-	rm -rf data/samples data/mirror data/index data/labels
+	rm -rf data/samples data/mirror data/fixtures data/ring data/index data/labels
 	find data -maxdepth 1 -type f ! -name '.gitkeep' -delete
 	@echo "footage removed. data/probe/REPORT.md kept."
 
