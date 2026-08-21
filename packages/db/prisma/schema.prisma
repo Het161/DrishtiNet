@@ -163,6 +163,8 @@ model Camera {
   tracks      Track[]
   alerts      Alert[]
   assignments DepartmentAssignment[]
+  events      Event[]
+  evidence    EvidenceClip[]
 
   @@index([district])
   @@index([status])
@@ -484,6 +486,9 @@ model EvidenceClip {
   path     String
   sha256   String
   sizeBytes BigInt? @map("size_bytes")
+  /// Internal camera id. The portal id in force at the time of capture is recorded in the
+  /// chain-of-custody JSON as an attribute, because it may point elsewhere by the time anyone
+  /// reads the clip back.
   cameraId String  @map("camera_id")
   startRecordedAt DateTime @map("start_recorded_at")
   endRecordedAt   DateTime @map("end_recorded_at")
@@ -492,6 +497,7 @@ model EvidenceClip {
   /// Append-only custody trail: who exported, when, why, and every subsequent access.
   chainOfCustody Json @map("chain_of_custody")
 
+  camera Camera  @relation(fields: [cameraId], references: [id])
   alerts Alert[]
 
   @@index([sha256])
@@ -523,11 +529,15 @@ model ApiSnapshot {
 model Event {
   id        String   @id @default(cuid())
   kind      String
+  /// Internal camera id. NEVER a portal id — those are positional and get reassigned.
   cameraId  String?  @map("camera_id")
   payload   Json
   createdAt DateTime @default(now()) @map("created_at")
 
+  camera Camera? @relation(fields: [cameraId], references: [id], onDelete: SetNull)
+
   @@index([kind, createdAt])
+  @@index([cameraId, createdAt])
   @@map("events")
 }
 

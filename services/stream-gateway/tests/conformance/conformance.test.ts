@@ -14,6 +14,11 @@ import {
   isDiscontinuity,
   type Frame,
 } from '../../src/live/stream-reader.js';
+import {
+  PtsVelocityEstimator,
+  SimpleTracker,
+  type Observation,
+} from '../../src/live/tracker-timing.js';
 
 /**
  * §4 CONFORMANCE SUITE — the gate before any connection to the real grid.
@@ -352,5 +357,78 @@ describe('absolute time anchoring survives the join burst', () => {
     a.observe({ ptsMs: 200, arrivalMs: 5_205 });   // 5.005 s
     a.observe({ ptsMs: 300, arrivalMs: 5_300 });   // 5.0 s
     expect(a.anchorMs).toBe(4_920);
+  });
+});
+
+/* ────────────────────────────────────────────────────────────────────────────
+   9. Tracker sanity across the join burst
+   ────────────────────────────────────────────────────────────────────────────
+   The organisers' stated failure mode, and the one an evaluator actually sees: a car crossing a
+   junction must not acquire a second identity in the first second, and its speed must not read
+   ten times too high because a buffered GOP arrived faster than real time.
+   ──────────────────────────────────────────────────────────────────────────── */
+describe('§4.9 tracker survives the join burst', () => {
+  const TRUE_SPEED_PX_S = 240;   // a vehicle crossing the frame
+  const FPS = 25;
+  const FRAME_MS = 1000 / FPS;
+
+  /** One object at constant speed; the first `burstFrames` arrive 10x faster than real time. */
+  function scenario(burstFrames: number): Observation[] {
+    const out: Observation[] = [];
+    for (let i = 0; i < 100; i++) {
+      const ptsMs = i * FRAME_MS;
+      const arrivalMs = i < burstFrames ? i * (FRAME_MS / 10)
+                                        : burstFrames * (FRAME_MS / 10) + (i - burstFrames) * FRAME_MS;
+      out.push({ ptsMs, arrivalMs, x: 100 + (TRUE_SPEED_PX_S * ptsMs) / 1000, y: 300 });
+    }
+    return out;
+  }
+
+  it('estimates velocity within ±10% despite a 10x burst', () => {
+    const est = new PtsVelocityEstimator();
+    for (const obs of scenario(40)) est.add(obs);
+    const v = est.estimate()!;
+    expect(v.speed).toBeGreaterThan(TRUE_SPEED_PX_S * 0.9);
+    expect(v.speed).toBeLessThan(TRUE_SPEED_PX_S * 1.1);
+  });
+
+  it('shows what arrival-time timing would have produced', () => {
+    // The same data, dt taken from arrival instead of PTS — the mistake this rule forbids.
+    const frames = scenario(40);
+    const first = frames[0]!;
+    const last = frames[39]!;
+    const arrivalDt = (last.arrivalMs - first.arrivalMs) / 1000;
+    const wrongSpeed = (last.x - first.x) / arrivalDt;
+    // ~10x too fast, which is exactly why the association would fail.
+    expect(wrongSpeed).toBeGreaterThan(TRUE_SPEED_PX_S * 5);
+  });
+
+  it('never splits or re-creates the track across the burst', () => {
+    const tracker = new SimpleTracker();
+    const ids = scenario(40).map((obs) => tracker.observe(obs));
+    expect(new Set(ids).size).toBe(1);
+    expect(tracker.issuedIds).toHaveLength(1);
+  });
+
+  it('holds for a 12.5 fps camera too', () => {
+    // The grid runs 12.5 and 25 fps side by side; a frame-count window would behave differently.
+    const est = new PtsVelocityEstimator();
+    for (let i = 0; i < 60; i++) {
+      const ptsMs = i * 80;
+      est.add({ ptsMs, arrivalMs: i < 20 ? i * 8 : 160 + (i - 20) * 80,
+                x: 100 + (TRUE_SPEED_PX_S * ptsMs) / 1000, y: 300 });
+    }
+    const v = est.estimate()!;
+    expect(Math.abs(v.speed - TRUE_SPEED_PX_S) / TRUE_SPEED_PX_S).toBeLessThan(0.1);
+  });
+
+  it('two objects still get two identities — the fix does not merge everything', () => {
+    const tracker = new SimpleTracker();
+    for (let i = 0; i < 40; i++) {
+      const ptsMs = i * FRAME_MS;
+      tracker.observe({ ptsMs, arrivalMs: ptsMs, x: 100 + (240 * ptsMs) / 1000, y: 300 });
+      tracker.observe({ ptsMs, arrivalMs: ptsMs, x: 900 - (240 * ptsMs) / 1000, y: 700 });
+    }
+    expect(tracker.issuedIds.length).toBe(2);
   });
 });
