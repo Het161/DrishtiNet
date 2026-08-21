@@ -69,8 +69,12 @@ e2e: ## Run Playwright end-to-end tests (needs the web app running)
 	cd apps/web && PLAYWRIGHT_BROWSERS_PATH=$(ROOT)/.cache/playwright pnpm exec playwright test
 
 .PHONY: web
-web: ## Build and serve the web app against the local database
-	cd apps/web && pnpm build && pnpm start
+web: env ## Build and serve the web app (loads .env; no manual exports needed)
+	@set -a && . ./.env && set +a && cd apps/web && pnpm build && pnpm start
+
+.PHONY: web-dev
+web-dev: env ## Serve the web app in dev mode with hot reload
+	@set -a && . ./.env && set +a && cd apps/web && pnpm dev
 
 .PHONY: doctor
 doctor: ## Preflight: toolchain, services, disk, offline assets
@@ -85,17 +89,21 @@ pmtiles: ## Build the offline roads/labels PMTiles archives (needs internet; out
 	./scripts/build_pmtiles.sh
 
 .PHONY: seed
-seed: ## Re-seed the registry from config/cameras.yaml (preserves human-placed positions)
-	cd packages/db && pnpm exec tsx src/seed.ts
+seed: env ## Re-seed the registry from config/cameras.yaml (preserves human-placed positions)
+	@set -a && . ./.env && set +a && cd packages/db && pnpm exec tsx src/seed.ts
+
+.PHONY: migrate
+migrate: env ## Apply pending database migrations (additive only; never resets)
+	@set -a && . ./.env && set +a && cd packages/db && pnpm exec prisma migrate deploy && pnpm exec prisma generate
+
+.PHONY: grid-check
+grid-check: ## Check whether the organisers' grid is reachable from THIS network
+	@./scripts/grid-check.sh $(CAM)
 
 .PHONY: check
 check: typecheck test ## Typecheck + test (run before every commit)
 
 # ── portal interaction (all polite, sequential, logged) ──────────────────────
-
-.PHONY: proxy
-proxy: ## Run the caching range proxy (required for deep seeks into portal files)
-	@cd $(GATEWAY) && pnpm -s exec tsx src/range-proxy-server.ts
 
 .PHONY: sync-registry
 sync-registry: ## Sync the registry from /api/ingest, reconciling by label (never deletes)
