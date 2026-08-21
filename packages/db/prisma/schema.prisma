@@ -120,6 +120,13 @@ model Camera {
   locationStatus       LocationStatus @default(unverified) @map("location_status")
   /// Radius in metres the map draws around the marker. Always set, even when verified.
   locationUncertaintyM Int            @default(15000) @map("location_uncertainty_m")
+  /// Why the radius is what it is, in operator-facing language ("named four-way junction",
+  /// "town-scale uncertainty"). A radius without a stated reason is not auditable.
+  locationBasis        String?        @map("location_basis")
+  /// Who placed this camera and when. Written only by the drag-to-place tool, so a `verified`
+  /// position always has a named human behind it.
+  locationSetBy        String?        @map("location_set_by")
+  locationSetAt        DateTime?      @map("location_set_at")
 
   status       CameraStatus @default(online)
   statusSource StatusSource @default(portal_claim) @map("status_source")

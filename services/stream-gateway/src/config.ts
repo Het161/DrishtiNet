@@ -41,6 +41,8 @@ export interface CameraConfigEntry extends CameraSource {
   locationStatus: LocationStatus;
   /** Radius in metres the map draws around the marker. Always set. */
   locationUncertaintyM: number;
+  /** Why that radius — shown to the operator so the number is auditable. */
+  locationBasis: string | null;
   status: CameraStatus;
   statusSource: StatusSource;
   lastError: string | null;
@@ -152,6 +154,7 @@ export async function loadCamerasConfig(path: string): Promise<CamerasConfig> {
       lng: hasLng ? Number(c.lng) : null,
       locationStatus: locationStatus as LocationStatus,
       locationUncertaintyM: uncertainty,
+      locationBasis: c.location_basis ?? null,
       status: status as CameraStatus,
       statusSource: statusSource as StatusSource,
       lastError: c.last_error ?? null,

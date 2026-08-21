@@ -16,9 +16,11 @@ import {
   MapPin,
   Search,
   ShieldQuestion,
+  Crosshair,
 } from 'lucide-react';
 
 import { RegistryMap } from './RegistryMap';
+import { PlacePanel } from './PlacePanel';
 import type { RegistryCamera, RegistryData } from '@/lib/registry';
 import { translator, type Locale } from '@/lib/i18n';
 
@@ -64,10 +66,13 @@ function Stat({
 export function RegistryShell({
   data,
   hasPmtiles = false,
+  canPlace = false,
   locale = 'en',
 }: {
   data: RegistryData;
   hasPmtiles?: boolean;
+  /** True when the signed-in user holds camera:write. Placement is hidden entirely otherwise. */
+  canPlace?: boolean;
   locale?: Locale;
 }) {
   const tr = translator(locale);
@@ -75,6 +80,8 @@ export function RegistryShell({
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | RegistryCamera['status']>('all');
   const [onlyUnknown, setOnlyUnknown] = useState(false);
+  const [placingId, setPlacingId] = useState<string | null>(null);
+  const [placingAt, setPlacingAt] = useState<{ lat: number; lng: number } | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -92,6 +99,7 @@ export function RegistryShell({
   }, [data.cameras, query, statusFilter, onlyUnknown]);
 
   const selected = data.cameras.find((c) => c.id === selectedId) ?? null;
+  const placingCamera = data.cameras.find((c) => c.id === placingId) ?? null;
 
   return (
     <div className="grid h-full grid-rows-[auto_1fr] gap-4 p-4">
@@ -130,6 +138,9 @@ export function RegistryShell({
           <RegistryMap
             cameras={filtered}
             hasPmtiles={hasPmtiles}
+            placingCameraId={placingId}
+            placingAt={placingAt}
+            onPlacePoint={setPlacingAt}
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
@@ -197,8 +208,23 @@ export function RegistryShell({
             </label>
           </div>
 
+          {placingCamera && (
+            <PlacePanel
+              camera={placingCamera}
+              point={placingAt}
+              onCancel={() => {
+                setPlacingId(null);
+                setPlacingAt(null);
+              }}
+              onDone={() => {
+                setPlacingId(null);
+                setPlacingAt(null);
+              }}
+            />
+          )}
+
           {/* Selected camera detail */}
-          {selected && (
+          {selected && !placingCamera && (
             <div className="border-b border-[var(--color-border)] bg-[var(--color-elevated)] p-3 text-xs">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="font-medium">{selected.name}</div>
@@ -258,6 +284,20 @@ export function RegistryShell({
                   </>
                 )}
               </dl>
+
+              {canPlace && (
+                <button
+                  className="btn3d mt-3"
+                  onClick={() => {
+                    setPlacingId(selected.id);
+                    // Seed the preview at the current marker so a small correction is a small drag.
+                    setPlacingAt({ lat: selected.lat, lng: selected.lng });
+                  }}
+                >
+                  <Crosshair size={14} />
+                  {selected.locationStatus === 'verified' ? 'Re-place camera' : 'Place camera'}
+                </button>
+              )}
             </div>
           )}
 

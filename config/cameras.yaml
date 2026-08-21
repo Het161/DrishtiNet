@@ -71,10 +71,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
+    location_basis: Chimanbhai Patel Bridge — identifiable bridge approach
   - portal_id: '2'
     label: '02 Janpath'
     label_number: 2
@@ -98,6 +99,7 @@ cameras:
     status: online
     last_error:
     status_source: measured
+    location_basis: no position — shown at district centroid
   - portal_id: '3'
     label: '03 O.N.G.C. Office'
     label_number: 3
@@ -117,10 +119,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
+    location_basis: ONGC Office, Chandkheda — named frontage
   - portal_id: '4'
     label: '04 Paldi Circle'
     label_number: 4
@@ -139,11 +142,12 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
-    location_status: verified
-    location_uncertainty_m: 25
+    location_status: approximate
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
+    location_basis: Paldi Circle — named circle
   - portal_id: '5'
     label: '05 Visat teen Rasta'
     label_number: 5
@@ -162,11 +166,12 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
-    location_status: verified
-    location_uncertainty_m: 25
+    location_status: approximate
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
+    location_basis: Visat Teen Rasta — named three-way junction
   - portal_id: '6'
     label: '06 Timbavadi gate-Junagadh'
     label_number: 6
@@ -188,10 +193,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: offline
     last_error: HTTP 500 from origin (AVI container), measured 2026-08-20
     status_source: measured
+    location_basis: Timbawadi Gate — named gate
   - portal_id: '7'
     label: '07 hero-showroom-gir-somnath'
     label_number: 7
@@ -211,10 +217,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2500
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Gir Somnath — Veraval assumed, town-scale uncertainty
   - portal_id: '8'
     label: '08 majewadi-gate-junagadh'
     label_number: 8
@@ -234,10 +241,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Majevadi Gate — named gate
   - portal_id: '9'
     label: '09 new-bypass-near-by-circle-junagadh-2'
     label_number: 9
@@ -261,6 +269,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '10'
     label: '10 char-chowk-road-2-junagadh'
     label_number: 10
@@ -280,10 +289,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: measured
+    location_basis: Char Chowk — named four-way junction
   - portal_id: '11'
     label: '11 dolatpara-junagadh'
     label_number: 11
@@ -303,10 +313,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Dolatpara GIDC — named industrial estate gate
   - portal_id: '12'
     label: '12 Tri Mandir Adalaj Tollnaka'
     label_number: 12
@@ -325,11 +336,12 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
-    location_status: verified
-    location_uncertainty_m: 25
+    location_status: approximate
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Adalaj Trimandir toll plaza — fixed structure
   - portal_id: '13'
     label: '13 CN Vidhyalaya'
     label_number: 13
@@ -349,10 +361,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: C. N. Vidyalaya — named school frontage
   - portal_id: '14'
     label: '14 Delight'
     label_number: 14
@@ -376,6 +389,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '15'
     label: '15 Suvidha park'
     label_number: 15
@@ -399,6 +413,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '16'
     label: '16 Visat P2'
     label_number: 16
@@ -418,11 +433,12 @@ cameras:
     delivery: progressive
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
-    location_status: verified
-    location_uncertainty_m: 25
+    location_status: approximate
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Visat P2 — second angle on the Visat junction
   - portal_id: '17'
     label: '17 Rajkot Bus Port CCTV'
     label_number: 17
@@ -442,10 +458,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 1500
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Rajkot Bus Port — terminal footprint
   - portal_id: '18'
     label: '17 Rajkot CCTV'
     label_number: 17
@@ -470,6 +487,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '19'
     label: '18 Rajkot CCTV'
     label_number: 18
@@ -493,6 +511,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '20'
     label: '19 KHAPARIA GRAM PANCHAYAT , TALUKA GANDEVI, DISTRICT NAVSARI'
     label_number: 19
@@ -512,10 +531,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: measured
+    location_basis: Khaparia village, Gandevi taluka
   - portal_id: '21'
     label: '20 Mohanpura'
     label_number: 20
@@ -540,6 +560,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '22'
     label: '23 Patan Dethali Char Rasta'
     label_number: 23
@@ -559,10 +580,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 200
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Dethali Char Rasta — named four-way junction
   - portal_id: '23'
     label: '28 BK Mervada tran Rasta'
     label_number: 28
@@ -587,6 +609,7 @@ cameras:
     status: degraded
     last_error: AVI container; range-seek not yet verified
     status_source: measured
+    location_basis: no position — shown at district centroid
   - portal_id: '24'
     label: '30 kheram'
     label_number: 30
@@ -610,6 +633,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '25'
     label: '33 dehgam'
     label_number: 33
@@ -629,10 +653,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Dehgam town
   - portal_id: '26'
     label: '34 dhanori'
     label_number: 34
@@ -656,6 +681,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '27'
     label: '35 TANKAL'
     label_number: 35
@@ -679,6 +705,7 @@ cameras:
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: no position — shown at district centroid
   - portal_id: '28'
     label: '36 bilimora'
     label_number: 36
@@ -698,10 +725,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Bilimora town
   - portal_id: '29'
     label: '37 bilimora'
     label_number: 37
@@ -721,10 +749,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Bilimora town
   - portal_id: '30'
     label: '38 bilimora'
     label_number: 38
@@ -744,10 +773,11 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: portal_claim
+    location_basis: Bilimora town
   - portal_id: '31'
     label: Gandhidham Rambaugh p2
     label_number:
@@ -767,7 +797,8 @@ cameras:
     portal_status: live
     last_seen: '2026-08-20T21:14:48+05:30'
     location_status: approximate
-    location_uncertainty_m: 500
+    location_uncertainty_m: 2000
     status: online
     last_error:
     status_source: measured
+    location_basis: Gandhidham Rambaugh area

@@ -84,6 +84,10 @@ basemap: ## Rebuild district boundaries + centroids from DataMeet (needs interne
 pmtiles: ## Build the offline roads/labels PMTiles archives (needs internet; output committed)
 	./scripts/build_pmtiles.sh
 
+.PHONY: seed
+seed: ## Re-seed the registry from config/cameras.yaml (preserves human-placed positions)
+	cd packages/db && pnpm exec tsx src/seed.ts
+
 .PHONY: check
 check: typecheck test ## Typecheck + test (run before every commit)
 

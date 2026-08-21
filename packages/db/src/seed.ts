@@ -173,6 +173,20 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
   const cfg = parse(await readFile(CAMERAS_YAML, 'utf8')) as Record<string, any>;
   const ids = new Map<string, string>();
 
+  // Positions a human placed with the drag-to-place tool outrank the YAML. Re-seeding must be
+  // safe to run at any time, including after an operator has spent an hour placing cameras.
+  //
+  // The discriminator is `locationSetBy`, NOT `locationStatus === 'verified'`. An earlier version
+  // guarded on the status alone and so preserved four cameras that a previous seed had marked
+  // verified — no human had ever placed them, and they survived a re-tiering that was supposed to
+  // reset every row to unplaced. Only a named placer means a human was actually involved.
+  const humanPlaced = new Set(
+    (await prisma.camera.findMany({
+      where: { locationSetBy: { not: null } },
+      select: { portalId: true },
+    })).map((c) => c.portalId),
+  );
+
   let verified = 0;
   let unverified = 0;
   let withGeom = 0;
@@ -187,6 +201,7 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
       cluster: c.cluster ?? null,
       locationStatus: c.location_status as 'verified' | 'approximate' | 'unverified',
       locationUncertaintyM: Number(c.location_uncertainty_m),
+      locationBasis: c.location_basis ?? null,
       status: c.status as 'online' | 'degraded' | 'offline',
       statusSource: c.status_source as 'measured' | 'portal_claim',
       lastError: c.last_error ?? null,
@@ -198,13 +213,21 @@ async function seedCameras(probes: Map<string, MediaProbe>): Promise<Map<string,
       where: { portalId },
       create: { portalId, ...data },
       // Deliberately does NOT touch departmentId: department assignment is an audited workflow,
-      // and a re-seed must never silently undo a human's decision.
-      update: data,
+      // and a re-seed must never silently undo a human's decision. The same applies to a position
+      // set with the drag-to-place tool — `verified` rows keep their coordinates and radius.
+      update: humanPlaced.has(portalId)
+        ? { label: data.label, name: data.name, status: data.status,
+            statusSource: data.statusSource, lastError: data.lastError,
+            lastSeenAt: data.lastSeenAt }
+        : data,
     });
     ids.set(portalId, camera.id);
 
     // geography must be written through raw SQL — Prisma cannot express the type.
-    if (c.lat != null && c.lng != null) {
+    // A human-placed camera keeps its coordinates untouched.
+    if (humanPlaced.has(portalId)) {
+      // leave geom alone
+    } else if (c.lat != null && c.lng != null) {
       await prisma.$executeRaw`
         UPDATE cameras
            SET geom = ST_SetSRID(ST_MakePoint(${Number(c.lng)}, ${Number(c.lat)}), 4326)::geography

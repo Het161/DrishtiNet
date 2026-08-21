@@ -3,6 +3,8 @@ import { Clock, Radio } from 'lucide-react';
 import { RegistryShell } from '@/components/RegistryShell';
 import { getRegistry } from '@/lib/registry';
 import { hasPmtilesArchives } from '@/lib/basemap';
+import { getSession, can } from '@/lib/auth';
+import { logoutAction } from '@/app/actions/auth';
 import { getTimeContext } from '@/lib/time-shift';
 import { translator } from '@/lib/i18n';
 
@@ -10,7 +12,11 @@ import { translator } from '@/lib/i18n';
 export const dynamic = 'force-dynamic';
 
 export default async function RegistryPage() {
-  const [data, pmtiles] = await Promise.all([getRegistry(), hasPmtilesArchives()]);
+  const [data, pmtiles, session] = await Promise.all([
+    getRegistry(),
+    hasPmtilesArchives(),
+    getSession(),
+  ]);
   const time = getTimeContext();
   const tr = translator('en');
 
@@ -34,6 +40,15 @@ export default async function RegistryPage() {
             <Clock size={13} />
             <span className="mono">{time.hoursUntilRollover.toFixed(1)}h</span> to rollover
           </span>
+          {session ? (
+            <form action={logoutAction}>
+              <button className="text-[var(--color-muted)] hover:text-[var(--color-text)]">
+                {session.displayName} · sign out
+              </button>
+            </form>
+          ) : (
+            <a href="/login" className="text-[var(--color-saffron)]">Sign in to place cameras</a>
+          )}
           {time.timeShifted && (
             <span className="rounded-md border border-[var(--color-saffron)] px-2 py-1 font-medium text-[var(--color-saffron)]">
               {tr('time.shifted')}
@@ -43,7 +58,7 @@ export default async function RegistryPage() {
       </header>
 
       <div className="min-h-0 flex-1">
-        <RegistryShell data={data} hasPmtiles={pmtiles} />
+        <RegistryShell data={data} hasPmtiles={pmtiles} canPlace={can(session, 'camera:write')} />
       </div>
     </main>
   );

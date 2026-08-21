@@ -60,6 +60,15 @@ export interface RegistryMapProps {
   cameras: RegistryCamera[];
   /** Whether the PMTiles road archives exist. Checked server-side; false degrades gracefully. */
   hasPmtiles?: boolean;
+  /**
+   * When set, the map is in placement mode: clicking or dragging sets this camera's position.
+   * The cursor becomes a crosshair and marker selection is suspended, so a click cannot be
+   * mistaken for "select a different camera" mid-placement.
+   */
+  placingCameraId?: string | null;
+  /** Live preview position while placing, so the operator sees where the marker will land. */
+  placingAt?: { lat: number; lng: number } | null;
+  onPlacePoint?: (point: { lat: number; lng: number }) => void;
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   /** Initial viewport. Defaults to the Junagadh demo cluster, per CLAUDE.md. */
@@ -72,6 +81,9 @@ const JUNAGADH: [number, number] = [70.4595, 21.5225];
 export function RegistryMap({
   cameras,
   hasPmtiles = false,
+  placingCameraId = null,
+  placingAt = null,
+  onPlacePoint,
   selectedId,
   onSelect,
   initialCenter = JUNAGADH,
@@ -79,6 +91,12 @@ export function RegistryMap({
 }: RegistryMapProps) {
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
+  // The map's click handlers are registered once, but placement state changes on every render.
+  // Refs keep the handlers reading current values instead of the ones captured at registration.
+  const placingRef = useRef<string | null>(placingCameraId);
+  const onPlaceRef = useRef(onPlacePoint);
+  placingRef.current = placingCameraId;
+  onPlaceRef.current = onPlacePoint;
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -278,10 +296,16 @@ export function RegistryMap({
     });
 
     m.on('click', 'camera-point', (e) => {
+      // While placing, a click on an existing marker is still a placement, not a selection.
+      if (placingRef.current) return;
       const id = e.features?.[0]?.properties?.id;
       if (typeof id === 'string') onSelect(id);
     });
     m.on('click', (e) => {
+      if (placingRef.current) {
+        onPlaceRef.current?.({ lat: e.lngLat.lat, lng: e.lngLat.lng });
+        return;
+      }
       const hits = m.queryRenderedFeatures(e.point, { layers: ['camera-point'] });
       if (hits.length === 0) onSelect(null);
     });
@@ -317,6 +341,43 @@ export function RegistryMap({
       })),
     });
   }, [selectedId, cameras, ready]);
+
+  // Placement affordances: a crosshair cursor, and a draggable preview marker showing exactly
+  // where the position will land before it is committed.
+  const placeMarker = useRef<maplibregl.Marker | null>(null);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+
+    m.getCanvas().style.cursor = placingCameraId ? 'crosshair' : '';
+
+    if (!placingCameraId || !placingAt) {
+      placeMarker.current?.remove();
+      placeMarker.current = null;
+      return;
+    }
+
+    if (!placeMarker.current) {
+      const el = document.createElement('div');
+      el.setAttribute('aria-label', 'Proposed camera position');
+      el.style.cssText = [
+        'width:20px', 'height:20px', 'border-radius:50%',
+        `border:3px solid ${token('--color-saffron', '#ff8a3d')}`,
+        'background:transparent',
+        `box-shadow:0 0 0 3px ${token('--color-base', '#0b0e14')}, 0 0 14px rgb(255 138 61 / 60%)`,
+        'cursor:grab',
+      ].join(';');
+      placeMarker.current = new maplibregl.Marker({ element: el, draggable: true })
+        .setLngLat([placingAt.lng, placingAt.lat])
+        .addTo(m);
+      placeMarker.current.on('dragend', () => {
+        const p = placeMarker.current?.getLngLat();
+        if (p) onPlaceRef.current?.({ lat: p.lat, lng: p.lng });
+      });
+    } else {
+      placeMarker.current.setLngLat([placingAt.lng, placingAt.lat]);
+    }
+  }, [placingCameraId, placingAt, ready]);
 
   // Fly to a camera chosen from the table.
   useEffect(() => {
