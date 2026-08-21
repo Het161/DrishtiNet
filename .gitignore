@@ -58,3 +58,12 @@ models/
 # the venue has no network and rebuilding them needs one.
 apps/web/public/maplibre/
 apps/web/.screenshots/
+
+# Evidence ring buffer — government footage, retention-limited
+data/ring/
+
+# Own demo footage / pre-migration fixtures
+data/own/
+
+# Own demo footage / pre-migration fixtures
+data/fixtures/

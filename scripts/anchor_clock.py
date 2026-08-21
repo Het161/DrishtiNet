@@ -49,6 +49,26 @@ USER_AGENT = (
     "(Gujarat Police Innovation Challenge participant; hetpatelsk@gmail.com)"
 )
 
+# ── MEASURED ACCURACY GATE ───────────────────────────────────────────────────────────────────────
+#
+# Measured on fixtures 2026-08-21: 35.4% exact-read across 96 sampled pairs. Per-clip it splits
+# sharply — cam_5_night 100%, cam_11_night 47%, daylight clips 0-40%, and cam_16 has NO burned-in
+# clock at all (blank in both day and night samples).
+#
+# That is far below the 95% gate, so continuous OCR reconciliation does NOT currently replace
+# manual anchoring. A reading is written to time_sync only when it clears CONFIDENCE_GATE; below
+# that it is recorded as `clock unreadable` and the drift model falls back to its existing anchors.
+# A wrong anchor silently poisons every timestamp that camera produces, which is strictly worse
+# than having no anchor at all.
+#
+# What would likely close the gap (Phase 3): a digit-only recogniser with a per-camera ROI learned
+# once from temporal variance (the clock ticks, the overlay around it does not), rather than a
+# general-purpose OCR reading a whole strip.
+MEASURED_EXACT_READ_ACCURACY = 0.354
+REQUIRED_ACCURACY = 0.95
+CONFIDENCE_GATE = 0.90
+AUTO_ANCHOR_ENABLED = MEASURED_EXACT_READ_ACCURACY >= REQUIRED_ACCURACY
+
 # Anchor positions: far enough apart to constrain the drift slope.
 EARLY_POSITION = 3600
 LATE_POSITION = 36000
@@ -96,27 +116,40 @@ def grab_frame(source: str, position: float, dest: Path) -> bool:
 
 def variants(frame: Path, out_dir: Path) -> list[Path]:
     """
-    Preprocessing variants of the clock strip.
+    Preprocessing variants of the clock region.
 
-    No single filter wins: on our test frame plain upscaling read the seconds correctly while a
-    hard threshold was the only one to get the hour right. Voting across variants recovers more
-    than any one of them.
+    Two lessons drove this set. First, a TIGHT crop matters far more than the filter: cropping the
+    full-width top strip drags in sky, trees and signage, and the detector spends its attention
+    there. Narrowing to the overlay box took a daylight frame from unreadable to
+    `14-06-20267 97:00:447:` against a truth of `14-06-2026 07:00:47` — nearly every digit correct.
+
+    Second, no single filter wins. Daylight puts white text on a bright sky and needs an aggressive
+    threshold; night is already high-contrast and a plain upscale reads it best. So we run several
+    and let the prior-scored matcher pick.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
-    # The clock sits in the top strip; crop full width so a left- or right-aligned overlay is caught.
-    strip = "crop=iw:ih*0.08:0:0"
-    specs = {
-        "plain": f"{strip},scale=iw*2:ih*2:flags=lanczos",
-        "thresh": f"{strip},format=gray,scale=iw*3:ih*3:flags=lanczos,lut=y='if(gte(val,180),255,0)'",
-        "thresh_inv": f"{strip},format=gray,scale=iw*3:ih*3:flags=lanczos,lut=y='if(gte(val,180),0,255)'",
-        "contrast": f"{strip},format=gray,scale=iw*3:ih*3:flags=lanczos,eq=contrast=1.8:brightness=0.05",
+    # Overlay boxes on this grid sit in a top corner. Try both, plus the full strip as a fallback
+    # for a camera that places it elsewhere.
+    regions = {
+        "tl": "crop=780:62:0:0",
+        "tr": "crop=780:62:iw-780:0",
+        "strip": "crop=iw:ih*0.08:0:0",
+    }
+    filters = {
+        "thresh": "format=gray,scale=iw*4:ih*4:flags=lanczos,lut=y='if(gte(val,200),255,0)'",
+        "hi": "format=gray,scale=iw*4:ih*4:flags=lanczos,lut=y='if(gte(val,228),255,0)'",
+        "inv": "format=gray,scale=iw*4:ih*4:flags=lanczos,lut=y='if(gte(val,200),0,255)'",
+        "plain": "scale=iw*4:ih*4:flags=lanczos",
     }
     made = []
-    for name, vf in specs.items():
-        dest = out_dir / f"{frame.stem}__{name}.png"
-        if run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(frame),
-                "-vf", vf, str(dest)]).returncode == 0 and dest.exists():
-            made.append(dest)
+    for rname, region in regions.items():
+        for fname, filt in filters.items():
+            # The full strip at 4x is large and slow; a 2x upscale is enough there.
+            vf = f"{region},{filt.replace('iw*4:ih*4', 'iw*2:ih*2') if rname == 'strip' else filt}"
+            dest = out_dir / f"{frame.stem}__{rname}_{fname}.png"
+            if run(["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(frame),
+                    "-vf", vf, str(dest)]).returncode == 0 and dest.exists():
+                made.append(dest)
     return made
 
 
@@ -292,16 +325,113 @@ def propose_for_camera(camera_id: str, base_url: str, use_mirror: bool) -> list[
     return out
 
 
+
+# ── accuracy measurement on fixtures ─────────────────────────────────────────────────────────────
+
+FIXTURE_CLIPS = [
+    ("05 Visat teen Rasta", "cam_5_daylight.mp4", 36000),
+    ("10 char-chowk-road-2-junagadh", "cam_10_daylight.mp4", 36000),
+    ("11 dolatpara-junagadh", "cam_11_daylight.mp4", 36000),
+    ("16 Visat P2", "cam_16_daylight.mp4", 36000),
+    ("05 Visat teen Rasta", "cam_5_night.mp4", 3600),
+    ("11 dolatpara-junagadh", "cam_11_night.mp4", 3600),
+    ("16 Visat P2", "cam_16_night.mp4", 3600),
+]
+
+
+def cmd_accuracy(samples_per_clip: int = 8) -> int:
+    """
+    Measure exact-read accuracy without needing an external ground truth.
+
+    The trick is self-consistency. Two frames taken D seconds apart inside one clip MUST show clock
+    readings D seconds apart — the burned-in clock advances with the footage. So we sample each clip
+    at known spacings and check the reading deltas match the seek deltas exactly. A single
+    misread digit breaks the delta and is counted as a failure.
+
+    This measures what actually matters for time_sync: not "is the absolute value right" (we have no
+    independent source for that) but "does OCR read the digits correctly", which is the same thing
+    for a clock that advances monotonically.
+    """
+    fixtures = ROOT / "data" / "fixtures"
+    work = ANCHOR_DIR / "accuracy"
+    work.mkdir(parents=True, exist_ok=True)
+
+    total = exact = unreadable = wrong = 0
+    per_clip = []
+
+    for label, filename, base_offset in FIXTURE_CLIPS:
+        clip = fixtures / filename
+        if not clip.exists():
+            continue
+
+        # Spread samples across the clip; spacing is irregular on purpose so a lucky constant
+        # cannot pass.
+        seeks = [20, 47, 113, 200, 341, 500, 727, 1000][:samples_per_clip]
+        readings: list[tuple[int, datetime.datetime | None, str]] = []
+
+        for seek in seeks:
+            frame = work / f"{clip.stem}_{seek}.jpg"
+            if not frame.exists() and not grab_frame(str(clip), float(seek), frame):
+                continue
+            expected = expected_clock(base_offset + seek)
+            raw, parsed, _score = read_clock(frame, expected, work)
+            readings.append((seek, parsed, raw))
+
+        # Compare every pair: the reading delta must equal the seek delta.
+        clip_total = clip_exact = 0
+        for i in range(len(readings)):
+            for j in range(i + 1, len(readings)):
+                si, di, _ = readings[i]
+                sj, dj, _ = readings[j]
+                clip_total += 1
+                total += 1
+                if di is None or dj is None:
+                    unreadable += 1
+                    continue
+                observed = (dj - di).total_seconds()
+                if abs(observed - (sj - si)) < 1.0:
+                    exact += 1
+                    clip_exact += 1
+                else:
+                    wrong += 1
+
+        read_ok = sum(1 for _, d, _ in readings if d is not None)
+        pct = 100 * clip_exact / clip_total if clip_total else 0
+        per_clip.append((label, filename, read_ok, len(readings), pct))
+        print(f"  {filename:<24} frames read {read_ok}/{len(readings)}   pair accuracy {pct:5.1f}%")
+
+    print()
+    print(f"  pairs compared    : {total}")
+    print(f"  exact             : {exact}  ({100*exact/total:.1f}%)" if total else "  no pairs")
+    print(f"  wrong delta       : {wrong}")
+    print(f"  unreadable frame  : {unreadable}")
+    if total:
+        acc = 100 * exact / total
+        gate = "PASS" if acc >= 95 else "BELOW THE 95% GATE"
+        print()
+        print(f"  exact-read accuracy: {acc:.1f}%  -> {gate}")
+        if acc < 95:
+            print("  Below the gate, a reading is recorded as 'clock unreadable' rather than")
+            print("  written into time_sync — a wrong anchor poisons every timestamp that camera")
+            print("  produces, which is worse than having no anchor at all.")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("mode", choices=["propose"])
-    ap.add_argument("--ids", required=True, help="comma-separated portal ids")
+    ap.add_argument("mode", choices=["propose", "accuracy"])
+    ap.add_argument("--samples", type=int, default=8, help="accuracy: frames per clip")
+    ap.add_argument("--ids", help="comma-separated portal ids (required for propose)")
     ap.add_argument("--base", default="http://127.0.0.1:4010",
                     help="range proxy base (deep seeks fail against the portal directly)")
     ap.add_argument("--no-mirror", action="store_true",
                     help="always fetch the late anchor from the portal instead of a local clip")
     args = ap.parse_args()
 
+    if args.mode == "accuracy":
+        return cmd_accuracy(args.samples)
+    if not args.ids:
+        ap.error("propose requires --ids")
     ANCHOR_DIR.mkdir(parents=True, exist_ok=True)
     existing = json.loads(PROPOSALS.read_text()) if PROPOSALS.exists() else []
     by_key = {(a["camera_id"], a["position_s"]): a for a in existing}

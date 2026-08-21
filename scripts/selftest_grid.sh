@@ -32,6 +32,7 @@ RTSP_PORT=${SELFTEST_RTSP_PORT:-8654}
 HLS_PORT=${SELFTEST_HLS_PORT:-8988}
 WEBRTC_PORT=${SELFTEST_WEBRTC_PORT:-8989}
 API_PORT=${SELFTEST_API_PORT:-9998}
+PLAYBACK_PORT=${SELFTEST_PLAYBACK_PORT:-9995}
 
 PID_DIR="$ROOT/.cache/selftest"
 OWN_DIR="$ROOT/data/own"
@@ -87,6 +88,15 @@ authInternalUsers:
       - action: playback
       - action: api
       - action: metrics
+# Ring buffer, same settings as production: records only while a path is active.
+record: yes
+recordPath: /ring/%path/%Y-%m-%d_%H-%M-%S-%f
+recordFormat: fmp4
+recordPartDuration: 1s
+recordSegmentDuration: 10s
+recordDeleteAfter: 5m
+playback: yes
+playbackAddress: :9996
 pathDefaults:
   source: publisher
 paths:
@@ -106,7 +116,9 @@ start_mediamtx() {
   docker rm -f "$MEDIAMTX_CONTAINER" >/dev/null 2>&1 || true
   docker run -d --name "$MEDIAMTX_CONTAINER" \
     -p "${RTSP_PORT}:8554" -p "${HLS_PORT}:8888" -p "${WEBRTC_PORT}:8889" -p "${API_PORT}:9997" \
+    -p "${PLAYBACK_PORT}:9996" \
     -v "$PID_DIR/mediamtx.yml:/mediamtx.yml:ro" \
+    -v "$ROOT/data/ring:/ring" \
     "$MEDIAMTX_IMAGE" >/dev/null
   for _ in $(seq 1 30); do
     curl -sS --max-time 2 "http://127.0.0.1:${API_PORT}/v3/config/global/get" >/dev/null 2>&1 && break

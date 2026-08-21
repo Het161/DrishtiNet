@@ -52,9 +52,25 @@ hlsAlwaysRemux: no
 api: yes
 apiAddress: :9997
 
-# Playback of recorded segments is not used; evidence clips are cut by the analytics service and
-# stored in MinIO with a SHA-256 and a chain-of-custody row.
-playback: no
+###############################################
+# Evidence ring buffer — MediaMTX records natively
+###############################################
+# Deliberately NOT hand-built. MediaMTX already writes segmented fMP4 and serves a time range
+# through its playback API, and — critically — it records only while a path is ACTIVE. That matches
+# our lazy policy exactly: nothing is recorded for a camera nobody is watching, so the ring buffer
+# cannot quietly accumulate government footage in the background.
+#
+# We record what we RECEIVE. We never fetch files from the organisers.
+record: yes
+recordPath: /ring/%path/%Y-%m-%d_%H-%M-%S-%f
+recordFormat: fmp4
+recordPartDuration: 1s
+recordSegmentDuration: 60s
+# Retention is enforced by MediaMTX itself rather than by a cron job we might forget to ship.
+recordDeleteAfter: 15m
+
+playback: yes
+playbackAddress: :9996
 metrics: no
 pprof: no
 
