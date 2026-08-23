@@ -40,13 +40,18 @@ maplibregl.setWorkerUrl('/maplibre/maplibre-gl-csp-worker.js');
 /**
  * Register the pmtiles:// protocol once per page, not per map instance — MapLibre keeps protocol
  * handlers in a module-level registry and re-adding one on every mount leaks handlers.
+ *
+ * `fresh` throws the handler away and builds a new one. A Protocol caches each archive by URL, and
+ * a failed header fetch is cached with everything else, so the failure outlives the map that hit
+ * it: rebuilding the map alone replays the cached failure and recovers nothing. Retry has to
+ * discard the protocol as well, which is why this can be called more than once.
  */
-let pmtilesRegistered = false;
-function registerPmtiles(): void {
-  if (pmtilesRegistered) return;
-  const protocol = new Protocol();
-  maplibregl.addProtocol('pmtiles', protocol.tile);
-  pmtilesRegistered = true;
+let pmtilesProtocol: Protocol | null = null;
+function registerPmtiles(fresh = false): void {
+  if (pmtilesProtocol && !fresh) return;
+  if (pmtilesProtocol) maplibregl.removeProtocol('pmtiles');
+  pmtilesProtocol = new Protocol();
+  maplibregl.addProtocol('pmtiles', pmtilesProtocol.tile);
 }
 
 /** Read from the CSS tokens so the map can never drift from the design system. */
@@ -98,7 +103,29 @@ export function RegistryMap({
   placingRef.current = placingCameraId;
   onPlaceRef.current = onPlacePoint;
   const [ready, setReady] = useState(false);
+  /** Fatal: the basemap never came up. Sticky, because nothing will fix itself. */
   const [error, setError] = useState<string | null>(null);
+  /** Recoverable: tiles are failing right now. Clears the moment the map renders cleanly again. */
+  const [tileTrouble, setTileTrouble] = useState<string | null>(null);
+  /** Sources with an outstanding failure. The notice lifts only when every one has come back. */
+  const failingSources = useRef<Set<string>>(new Set());
+  /**
+   * Bumped to rebuild the map from scratch.
+   *
+   * Measured: MapLibre never re-requests a source whose archive fetch failed — panning, zooming and
+   * waiting all produce zero retries, so one unlucky fetch at startup kills the roads basemap for
+   * the rest of the page's life. Rebuilding the instance is the only thing that actually recovers
+   * it, and an operator on a projector needs that without being told to reload the browser.
+   */
+  const [attempt, setAttempt] = useState(0);
+
+  function retryBasemap(): void {
+    failingSources.current.clear();
+    setTileTrouble(null);
+    setError(null);
+    setReady(false);
+    setAttempt((n) => n + 1);
+  }
 
   // ── init ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -109,7 +136,9 @@ export function RegistryMap({
     const border = token('--color-border', '#232c3d');
     const muted = token('--color-muted', '#8a93a6');
 
-    registerPmtiles();
+    // Every rebuild past the first is a retry, and a retry that reused the cached archive failure
+    // would be theatre.
+    registerPmtiles(attempt > 0);
 
     const style = buildBasemapStyle({
       palette: {
@@ -156,7 +185,12 @@ export function RegistryMap({
     );
     instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-    instance.on('load', () => setReady(true));
+    instance.on('load', () => {
+      setReady(true);
+      // A map that finished loading is not a failed map. Any error raised on the way here was
+      // survivable by definition, so it must not outlive the thing it described.
+      setError(null);
+    });
 
     // A map stuck on "loading" during a demo is worse than an explicit failure, and the worker
     // failure mode above produces exactly that with no error event. Fail loudly instead.
@@ -166,10 +200,41 @@ export function RegistryMap({
       }
     }, 10_000);
     instance.once('load', () => clearTimeout(stall));
+
     instance.on('error', (e) => {
-      // A missing basemap must be loud: silently showing an empty rectangle during a demo is worse
-      // than an explicit message.
-      if (e?.error?.message) setError(e.error.message);
+      const message = e?.error?.message;
+      if (!message) return;
+
+      // MapLibre raises `error` for one failed tile as readily as for a broken style, and a tile
+      // fetch fails for entirely ordinary reasons — a dev-server restart, a momentary stall. Those
+      // are recoverable: the map retries and carries on. Treating them as fatal left a working map
+      // wearing a permanent "Map failed to load" banner, which is a worse lie than saying nothing,
+      // because the operator can see the map working and learns to distrust the warning.
+      const scoped = e as typeof e & { sourceId?: string };
+      if (scoped.sourceId) {
+        failingSources.current.add(scoped.sourceId);
+        setTileTrouble(message);
+        return;
+      }
+      if (instance.isStyleLoaded()) {
+        setTileTrouble(message);
+        return;
+      }
+
+      // Unscoped and raised before the style ever loaded — the basemap itself is broken.
+      setError(message);
+    });
+
+    // Recovery is a fact to observe, not a timeout to wait out: the notice lifts when the source
+    // that failed reports itself loaded again. Keying it on elapsed time or on `idle` would be
+    // wrong in both directions — a map holding a permanently broken source may never go idle, so
+    // a genuine failure could stay on screen forever, while an unrelated source finishing would
+    // clear a notice about a source still broken.
+    instance.on('sourcedata', (e) => {
+      const scoped = e as typeof e & { sourceId?: string; isSourceLoaded?: boolean };
+      if (!scoped.sourceId || !scoped.isSourceLoaded) return;
+      failingSources.current.delete(scoped.sourceId);
+      if (failingSources.current.size === 0) setTileTrouble(null);
     });
 
     map.current = instance;
@@ -184,8 +249,10 @@ export function RegistryMap({
       map.current = null;
     };
     // Viewport props are initial-only by design; changing them later should not re-create the map.
+    // `attempt` is the deliberate exception: bumping it tears the instance down and rebuilds it,
+    // which is the only way a dead source comes back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
 
   // ── camera layers ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -396,9 +463,39 @@ export function RegistryMap({
     <div className="relative h-full w-full">
       <div ref={container} className="h-full w-full" aria-label="Camera location map" role="img" />
       {error && (
-        <div className="absolute inset-x-4 top-4 rounded-lg border border-[var(--color-critical)] bg-[var(--color-surface)] p-3 text-xs">
+        <div
+          role="alert"
+          className="absolute inset-x-4 top-4 rounded-lg border border-[var(--color-critical)] bg-[var(--color-surface)] p-3 text-xs"
+        >
           <strong className="text-[var(--color-critical)]">Map failed to load.</strong>{' '}
-          <span className="text-[var(--color-muted)]">{error}</span>
+          <span className="text-[var(--color-muted)]">{error}</span>{' '}
+          <button
+            type="button"
+            onClick={retryBasemap}
+            className="ml-1 underline underline-offset-2 hover:text-[var(--color-text)]"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+      {/* Only when the map is otherwise fine — the fatal banner already says everything. Worded as
+          the partial, self-correcting problem it is, so it never contradicts a visibly working map. */}
+      {!error && tileTrouble && (
+        <div
+          role="status"
+          className="absolute inset-x-4 top-4 rounded-lg border border-[var(--color-high)] bg-[var(--color-surface)] p-3 text-xs"
+        >
+          <strong className="text-[var(--color-high)]">Roads basemap unavailable.</strong>{' '}
+          <span className="text-[var(--color-muted)]">
+            District outlines and camera positions are unaffected.
+          </span>{' '}
+          <button
+            type="button"
+            onClick={retryBasemap}
+            className="ml-1 underline underline-offset-2 hover:text-[var(--color-text)]"
+          >
+            Retry
+          </button>
         </div>
       )}
       {!ready && !error && (
