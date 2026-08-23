@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "predev": "node scripts/dev-preflight.mjs",
     "dev": "pnpm --parallel --filter \"./apps/**\" --filter \"./services/**\" dev",
     "build": "pnpm -r build",
     "check": "pnpm -r typecheck && pnpm -r test:run",
