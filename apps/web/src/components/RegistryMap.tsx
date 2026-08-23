@@ -193,11 +193,35 @@ export function RegistryMap({
     });
 
     // A map stuck on "loading" during a demo is worse than an explicit failure, and the worker
-    // failure mode above produces exactly that with no error event. Fail loudly instead.
+    // failure mode above produces exactly that with no error event. Fail loudly instead — but only
+    // on evidence, and only for the map still on screen.
     const stall = setTimeout(() => {
-      if (!instance.isStyleLoaded()) {
-        setError('basemap did not finish loading — check /maplibre/maplibre-gl-csp-worker.js');
-      }
+      // React mounts effects twice in development, and a signed-in navigation remounts this
+      // component. The discarded instance's timer used to outlive it and stamp a fatal error onto
+      // the live map roughly ten seconds later — a working basemap wearing "did not finish
+      // loading". A timer belonging to a replaced instance has nothing to report.
+      if (map.current !== instance) return;
+      if (instance.isStyleLoaded()) return;
+
+      // A single unreachable source holds the style open while everything else draws fine, so
+      // "style not loaded" alone does not mean the basemap is dead.
+      //
+      // Ask what actually reached the screen. `isSourceLoaded` is no use here — measured, it
+      // answers true for sources whose worker is dead and which have therefore drawn nothing, so
+      // trusting it silences the one failure this timer exists to catch. Painted features separate
+      // the cases cleanly: a dead worker paints nothing, while a dead roads archive still leaves
+      // the districts drawn.
+      const sourceIds = Object.keys(instance.getStyle()?.sources ?? {});
+      const painted = sourceIds.reduce((total, id) => {
+        try {
+          return total + instance.querySourceFeatures(id).length;
+        } catch {
+          return total;
+        }
+      }, 0);
+      if (painted > 0) return; // Scoped failures are already reported by the error handler.
+
+      setError('basemap did not finish loading — check /maplibre/maplibre-gl-csp-worker.js');
     }, 10_000);
     instance.once('load', () => clearTimeout(stall));
 
@@ -245,6 +269,8 @@ export function RegistryMap({
 
     return () => {
       delete (window as unknown as { __drishtiMap?: MapLibreMap }).__drishtiMap;
+      // Nothing this instance scheduled may outlive it and speak for its replacement.
+      clearTimeout(stall);
       instance.remove();
       map.current = null;
     };

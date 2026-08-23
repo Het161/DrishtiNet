@@ -43,6 +43,29 @@ test.describe('drag-to-place', () => {
     await expect(page.getByRole('button', { name: /place camera/i })).toHaveCount(0);
   });
 
+  /**
+   * Signing in remounts the map, and the discarded instance's ten-second stall timer used to
+   * outlive it and stamp "basemap did not finish loading" onto its perfectly healthy replacement.
+   * It appeared several seconds after the page settled, so every quick check missed it.
+   *
+   * Hence the wait: the assertion only means anything past the stall deadline.
+   */
+  test('a signed-in map stays clean past the stall deadline', async ({ page }) => {
+    test.setTimeout(60_000);
+    await signIn(page, 'admin');
+    await waitForMap(page);
+
+    await page.waitForTimeout(14_000);
+
+    await expect(page.getByText('Map failed to load')).toHaveCount(0);
+    // Still genuinely working, not merely quiet about being broken.
+    const healthy = await page.evaluate(() => {
+      const m = (window as any).__drishtiMap;
+      return !!m && m.isStyleLoaded() && m.loaded();
+    });
+    expect(healthy).toBe(true);
+  });
+
   test('lets an admin place a camera and marks it verified', async ({ page }) => {
     await signIn(page, 'admin');
     await waitForMap(page);
