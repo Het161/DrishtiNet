@@ -304,6 +304,30 @@ const server = createServer((req, res) => {
   });
 });
 
+/**
+ * Startup failures must read as instructions, not stack traces.
+ *
+ * Without this the port clash you get from a gateway left running in another terminal arrives as an
+ * unhandled 'error' event: twenty lines of Node internals that also kill `npm run dev` outright, so
+ * the web app dies alongside a problem that has nothing to do with it. The cause is one sentence
+ * long and the fix is one command, so say both.
+ */
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\nstream-gateway: port ${PORT} is already in use.`);
+    console.error('Another gateway is probably still running from an earlier session.');
+    console.error(`  see it   : lsof -nP -iTCP:${PORT} -sTCP:LISTEN`);
+    console.error(`  stop it  : lsof -ti:${PORT} | xargs kill`);
+    console.error(`  or move  : STREAM_GATEWAY_PORT=<other> npm run dev\n`);
+  } else if (err.code === 'EACCES') {
+    console.error(`\nstream-gateway: not allowed to bind port ${PORT}.`);
+    console.error('Ports below 1024 need elevated privileges — pick a higher one.\n');
+  } else {
+    console.error(`\nstream-gateway: could not listen on ${PORT}: ${err.message}\n`);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, () => {
   console.error(`stream-gateway on http://127.0.0.1:${PORT}`);
   console.error(`  upstream      : ${UPSTREAM_BASE} (consume-only)`);
