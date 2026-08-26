@@ -52,6 +52,10 @@ test: ## Run every test suite
 typecheck: ## Typecheck all TypeScript packages
 	pnpm -r typecheck
 
+.PHONY: xcheck-timing
+xcheck-timing: ## Prove the Python and TypeScript timing rules still agree
+	@scripts/xcheck-timing.sh
+
 .PHONY: verify-slot
 verify-slot: ## Verify slot arithmetic against captured portal ground truth
 	@cd $(GATEWAY) && pnpm -s exec vitest run src/slot.test.ts
