@@ -68,6 +68,10 @@ index-fixture: ## Index an offline development fixture into the live index (dev 
 	 TORCH_HOME=$(ROOT)/.cache/torch ANALYTICS_DEVICE=auto \
 	 .venv/bin/python -m analytics.cli index $(ARGS)
 
+.PHONY: smoke
+smoke: ## Start the stack, check every service answers, then always stop it again
+	@scripts/smoke.sh
+
 .PHONY: xcheck-timing
 xcheck-timing: ## Prove the Python and TypeScript timing rules still agree
 	@scripts/xcheck-timing.sh
