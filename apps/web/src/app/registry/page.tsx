@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Clock, Radio } from 'lucide-react';
 
 import { RegistryShell } from '@/components/RegistryShell';
@@ -28,6 +29,17 @@ export default async function RegistryPage() {
             {tr('app.name')}
           </span>
           <span className="text-xs text-[var(--color-muted)]">{tr('registry.title')}</span>
+          {/* Without a link here the analytics half of the system is unreachable — someone signing
+              in lands on the registry and has no way to discover that anything else exists. */}
+          <nav className="flex items-center gap-3 text-xs">
+            <span className="text-[var(--color-border)]">|</span>
+            <Link
+              href="/operations"
+              className="text-[var(--color-teal)] underline-offset-4 hover:underline"
+            >
+              Operations
+            </Link>
+          </nav>
         </div>
 
         <div className="flex items-center gap-4 text-xs">

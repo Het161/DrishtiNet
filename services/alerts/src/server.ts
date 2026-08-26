@@ -316,9 +316,43 @@ function percentile(values: number[], p: number): number | null {
   return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))]!;
 }
 
+/**
+ * Origins allowed to open the alert stream.
+ *
+ * The web app runs on its own port, so every request here is cross-origin and the browser will
+ * refuse the EventSource without these headers — silently, as an opaque network error that looks
+ * like the alerts service being down rather than a policy decision.
+ *
+ * An explicit list rather than `*`: this stream carries watchlist matches, and the whole system is
+ * meant to run on a closed network. WEB_ORIGIN covers a deployment that moves the app elsewhere.
+ */
+const ALLOWED_ORIGINS = new Set(
+  [
+    process.env.WEB_ORIGIN,
+    `http://localhost:${process.env.WEB_PORT ?? 3000}`,
+    `http://127.0.0.1:${process.env.WEB_PORT ?? 3000}`,
+  ].filter(Boolean) as string[],
+);
+
+function applyCors(req: IncomingMessage, res: ServerResponse): void {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('access-control-allow-origin', origin);
+    res.setHeader('vary', 'origin');
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
   const path = url.pathname.replace(/\/$/, '') || '/';
+
+  applyCors(req, res);
+  if (req.method === 'OPTIONS') {
+    res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS');
+    res.setHeader('access-control-allow-headers', 'content-type');
+    res.writeHead(204);
+    return res.end();
+  }
 
   if (path === '/health') {
     return json(res, 200, {
