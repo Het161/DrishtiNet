@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev -p ${WEB_PORT:-3000}",
+    "dev": "node scripts/dev.mjs dev",
     "build": "next build",
-    "start": "next start -p ${WEB_PORT:-3000}",
+    "start": "node scripts/dev.mjs start",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",

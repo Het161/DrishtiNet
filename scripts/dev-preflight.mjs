@@ -19,6 +19,15 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
+// Read the same .env the services will. Checking process.env alone meant this guard tested the
+// default ports while the stack started on the configured ones — so it blocked a start over a port
+// nothing was about to use, and named the wrong project as the obstacle.
+try {
+  process.loadEnvFile(resolve(REPO_ROOT, '.env'));
+} catch {
+  // No .env yet; the defaults below are correct in that case.
+}
+
 const PORTS = [
   { port: Number(process.env.WEB_PORT ?? 3000), what: 'web app', varName: 'WEB_PORT' },
   {
