@@ -52,7 +52,63 @@ const CONSUMER_NAME = `alerts-${process.pid}`;
 const WATCHLIST_REFRESH_MS = 30_000;
 
 const pool = new Pool({ connectionString: DATABASE_URL });
-const redis = new Redis(REDIS_URL, { maxRetriesPerRequest: null, lazyConnect: true });
+
+/**
+ * The bus connection, which must survive Redis not being there.
+ *
+ * Redis being briefly absent is ordinary — a `docker compose` restart, a laptop waking up, the
+ * backing services starting a moment after the app. It is not a reason to exit. This service used
+ * to die on it, and because every service runs under one `pnpm --parallel`, its death took the web
+ * app and the gateway down too: a missing cache container turned into a stack that would not start.
+ *
+ * The analytics publisher already treats an unreachable bus as "live alerting is off, indexing
+ * continues". This is the same decision on the consuming side.
+ */
+const redis = new Redis(REDIS_URL, {
+  maxRetriesPerRequest: null,
+  lazyConnect: true,
+  // The same 2 s → 30 s shape the live-stream rules use, for the same reason: never hammer a
+  // service that is already struggling.
+  retryStrategy: (attempt) => Math.min(2_000 * 2 ** Math.max(0, attempt - 1), 30_000),
+});
+
+/** Whether the bus is currently usable, reported honestly by /health. */
+let busConnected = false;
+let busOutageLogged = false;
+
+// Without a listener, ioredis's 'error' is an unhandled EventEmitter error, which Node turns into
+// a fatal throw. This is the single line whose absence crashed the process.
+redis.on('error', (err) => {
+  busConnected = false;
+  if (!busOutageLogged) {
+    console.error(
+      `alerts: event bus unavailable at ${REDIS_URL} (${describeRedisError(err)}). ` +
+        `Retrying in the background; existing alerts are still served from Postgres.`,
+    );
+    busOutageLogged = true;
+  }
+});
+
+/**
+ * A readable reason from an ioredis failure.
+ *
+ * A refused connection arrives as an AggregateError whose own `message` is empty — one per address
+ * family — so the obvious `err.message` prints "()" and tells an operator nothing about whether
+ * Redis is down, the port is wrong, or the host is unreachable.
+ */
+function describeRedisError(err: unknown): string {
+  const e = err as { message?: string; code?: string; errors?: { code?: string }[] };
+  if (e?.message) return e.message;
+  const codes = [...new Set((e?.errors ?? []).map((x) => x?.code).filter(Boolean))];
+  if (codes.length) return codes.join(', ');
+  return e?.code ?? 'unreachable';
+}
+
+redis.on('ready', () => {
+  busConnected = true;
+  if (busOutageLogged) console.error('alerts: event bus reconnected');
+  busOutageLogged = false;
+});
 
 // ── operator connections ──────────────────────────────────────────────────────
 
@@ -266,7 +322,10 @@ const server = createServer(async (req, res) => {
 
   if (path === '/health') {
     return json(res, 200, {
-      ok: true,
+      // Serving is not the same as working. With the bus down this process answers every request
+      // and raises no alerts, which looks identical to a quiet night unless it says so here.
+      ok: busConnected,
+      bus: busConnected ? 'connected' : 'unavailable — no new alerts will be raised',
       subscribers: subscribers.size,
       watchlistEntries: watchlist.length,
       signaturesProcessed: processed,
@@ -321,17 +380,46 @@ server.on('error', (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
-server.listen(PORT, async () => {
+server.listen(PORT, () => {
   console.error(`alerts on http://127.0.0.1:${PORT}`);
-  await redis.connect();
-  await loadWatchlist(true);
-  console.error(`  watchlist : ${watchlist.length} active entries`);
+
+  // Deliberately not awaited, and deliberately not fatal. The HTTP surface — /health, /alerts,
+  // /stream — is useful before the bus is up, and reporting an outage is more use to an operator
+  // than a process that exited.
+  void loadWatchlist(true)
+    .then(() => console.error(`  watchlist : ${watchlist.length} active entries`))
+    .catch((err) => console.error(`  watchlist : could not load yet (${err.message})`));
+
   console.error(`  consuming : ${STREAM_KEYS.signatures}`);
-  consume().catch((err) => {
-    console.error('consumer stopped:', err);
-    process.exit(1);
-  });
+  void consumeForever();
 });
+
+/**
+ * Run the consumer, restarting it when the bus goes away.
+ *
+ * A dropped connection is an interruption, not a fault. Exiting here would mean a Redis restart
+ * takes down a service an operator is watching alerts on, which is exactly when they need it.
+ */
+async function consumeForever(): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      if (redis.status !== 'ready' && redis.status !== 'connecting') {
+        await redis.connect();
+      }
+      attempt = 0;
+      await consume();
+    } catch (err) {
+      const delay = Math.min(2_000 * 2 ** Math.min(attempt, 4), 30_000);
+      if (!busOutageLogged) {
+        console.error(
+          `alerts: consumer stopped (${(err as Error).message}); retrying in ${delay / 1000}s`,
+        );
+        busOutageLogged = true;
+      }
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
