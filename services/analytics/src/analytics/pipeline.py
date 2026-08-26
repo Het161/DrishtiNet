@@ -55,13 +55,17 @@ class Detection:
 
 @dataclass
 class OpenTrack:
-    """A track being accumulated. Becomes a Track row plus one VehicleSignature when it closes."""
+    """A track being accumulated, persisted from the moment it opens."""
 
     tracker_id: int
     cls: str
     started_recorded_at_ms: float
     last_recorded_at_ms: float
     frame_count: int = 0
+    #: Database id, assigned when the track is first persisted.
+    db_id: str | None = None
+    #: Frame count at which a signature was last emitted, so it is not recomputed every frame.
+    signature_at_frame: int = 0
     #: Crops kept for the appearance embedding and colour estimate. Bounded deliberately: a track
     #: that lingers for ten minutes must not accumulate ten minutes of crops in memory.
     crops: list = field(default_factory=list)
@@ -85,6 +89,18 @@ class TrackAccumulator:
     MAX_CROPS = 8
     #: A track unseen for this long in forensic time is finished.
     IDLE_CLOSE_MS = 2_000.0
+
+    #: Frames after which a provisional signature is emitted, while the vehicle is still in view.
+    #:
+    #: Waiting for the track to close before identifying anything would mean every watchlist alert
+    #: arrives after the vehicle has left the junction — accurate, and useless to the officer being
+    #: asked to intercept it. Four frames at the 3-5 fps sample grid is roughly a second of footage,
+    #: which is enough for a stable appearance embedding and still inside the time a vehicle is
+    #: crossing frame.
+    EARLY_SIGNATURE_FRAMES = 4
+    #: Re-emit as more views accumulate: a later signature is built from more angles and supersedes
+    #: the earlier one, so a vehicle that was ambiguous at four frames can still be matched at ten.
+    RESIGNATURE_EVERY = 12
 
     def __init__(self) -> None:
         self._open: dict[int, OpenTrack] = {}
@@ -118,6 +134,26 @@ class TrackAccumulator:
             elif area > track.best_crop_area:
                 track.crops[0] = crop
                 track.best_crop_area = area
+
+    def due_for_signature(self) -> list[OpenTrack]:
+        """
+        Tracks with enough views to identify, that have not been published at this length yet.
+
+        This is what makes an alert arrive while the vehicle is still on screen rather than after it
+        has gone.
+        """
+        due = []
+        for track in self._open.values():
+            if track.cls not in VEHICLE_CLASSES:
+                continue
+            if track.frame_count < self.EARLY_SIGNATURE_FRAMES:
+                continue
+            if track.signature_at_frame == 0 or (
+                track.frame_count - track.signature_at_frame >= self.RESIGNATURE_EVERY
+            ):
+                track.signature_at_frame = track.frame_count
+                due.append(track)
+        return due
 
     def close_idle(self, now_recorded_at_ms: float) -> list[OpenTrack]:
         """Close tracks not seen recently. Returns the closed ones for persistence."""
@@ -230,6 +266,7 @@ class PipelineStats:
     detections: int = 0
     tracks_closed: int = 0
     discontinuities: int = 0
+    signatures_emitted: int = 0
 
 
 def run(
@@ -240,6 +277,7 @@ def run(
     on_detections=None,
     on_track_closed=None,
     on_discontinuity=None,
+    on_signature_ready=None,
 ) -> PipelineStats:
     """
     Drive one camera end to end.
@@ -279,6 +317,12 @@ def run(
         accumulator.update(detections, frame.image)
         if detections and on_detections:
             on_detections(detections)
+
+        # Identify while the vehicle is still in frame, not once it has gone.
+        if on_signature_ready:
+            due = accumulator.due_for_signature()
+            if due:
+                on_signature_ready(due)
 
         closed = accumulator.close_idle(recorded_at_ms)
         if closed:

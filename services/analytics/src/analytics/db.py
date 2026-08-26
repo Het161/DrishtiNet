@@ -95,6 +95,33 @@ class IndexWriter:
         self.detections_written = 0
         self.tracks_written = 0
 
+    def ensure_track(self, track) -> str:
+        """
+        Persist a track the moment it is worth identifying, and return its id.
+
+        Tracks used to be written only when they closed, which meant a signature — and therefore any
+        watchlist alert — could not exist until the vehicle had left. Inserting on first
+        identification instead lets the alert reach an operator while the vehicle is still in frame,
+        which is the difference between an alert and a report.
+        """
+        if track.db_id:
+            return track.db_id
+        track_id = _id()
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into tracks
+                  (id, camera_id, tracker_id, cls, started_recorded_at, ended_recorded_at, frame_count)
+                values (%s, %s, %s, %s, %s, null, %s)
+                """,
+                (track_id, self.camera_id, track.tracker_id, track.cls,
+                 _ts(track.started_recorded_at_ms), track.frame_count),
+            )
+        self.conn.commit()
+        track.db_id = track_id
+        self.tracks_written += 1
+        return track_id
+
     def stage(self, detections) -> None:
         for det in detections:
             self._pending.setdefault(det.tracker_id, []).append(det)
@@ -104,24 +131,33 @@ class IndexWriter:
         written: list[str] = []
         with self.conn.cursor() as cur:
             for track in tracks:
-                track_id = _id()
-                cur.execute(
-                    """
-                    insert into tracks
-                      (id, camera_id, tracker_id, cls, started_recorded_at,
-                       ended_recorded_at, frame_count)
-                    values (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        track_id,
-                        self.camera_id,
-                        track.tracker_id,
-                        track.cls,
-                        _ts(track.started_recorded_at_ms),
-                        _ts(track.last_recorded_at_ms),
-                        track.frame_count,
-                    ),
-                )
+                if track.db_id:
+                    # Already persisted when it was first identified; close it out.
+                    track_id = track.db_id
+                    cur.execute(
+                        "update tracks set ended_recorded_at = %s, frame_count = %s where id = %s",
+                        (_ts(track.last_recorded_at_ms), track.frame_count, track_id),
+                    )
+                else:
+                    track_id = _id()
+                    cur.execute(
+                        """
+                        insert into tracks
+                          (id, camera_id, tracker_id, cls, started_recorded_at,
+                           ended_recorded_at, frame_count)
+                        values (%s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            track_id,
+                            self.camera_id,
+                            track.tracker_id,
+                            track.cls,
+                            _ts(track.started_recorded_at_ms),
+                            _ts(track.last_recorded_at_ms),
+                            track.frame_count,
+                        ),
+                    )
+                    self.tracks_written += 1
 
                 for det in self._pending.pop(track.tracker_id, []):
                     cur.execute(
@@ -147,7 +183,6 @@ class IndexWriter:
                     self.detections_written += 1
 
                 written.append(track_id)
-                self.tracks_written += 1
         self.conn.commit()
         return written
 
@@ -160,7 +195,13 @@ class IndexWriter:
                   (id, track_id, cls, colour, colour_confidence, colour_uncertain,
                    embedding, embedding_model, partial_plate)
                 values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                on conflict (track_id) do nothing
+                on conflict (track_id) do update set
+                  cls = excluded.cls, colour = excluded.colour,
+                  colour_confidence = excluded.colour_confidence,
+                  colour_uncertain = excluded.colour_uncertain,
+                  embedding = excluded.embedding,
+                  embedding_model = excluded.embedding_model,
+                  partial_plate = coalesce(excluded.partial_plate, vehicle_signatures.partial_plate)
                 """,
                 (
                     _id(),

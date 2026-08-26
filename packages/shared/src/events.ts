@@ -16,6 +16,7 @@ export const STREAM_KEYS = {
   plates: 'drishti:plates',
   cameraHealth: 'drishti:camera-health',
   alerts: 'drishti:alerts',
+  signatures: 'drishti:signatures',
 } as const;
 
 export const CONSUMER_GROUPS = {
@@ -120,7 +121,44 @@ export const CameraHealthEvent = z.object({
 });
 export type CameraHealthEvent = z.infer<typeof CameraHealthEvent>;
 
+/**
+ * A finished vehicle signature — the unit the watchlist actually matches against.
+ *
+ * Emitted once per track, when the track closes, rather than per detection. A detection is not yet
+ * an identity, and a busy camera produces roughly eleven thousand of them a minute; publishing
+ * those would make the bus the bottleneck and give the matcher nothing it could act on anyway.
+ *
+ * The embedding is here because on this grid it carries the identification. Measured at the
+ * organisers' camera geometry, a plate occupies about 41 px of a median 164 px vehicle box, which
+ * nothing reads; the appearance embedding separates same-vehicle (0.950) from different-vehicle
+ * (0.544) cleanly. `partial_plate` is corroboration when it happens to be legible, never the key.
+ */
+export const SignatureEvent = z.object({
+  type: z.literal('signature.created'),
+  event_id: z.string(),
+  /** Internal camera id. Never a portal id — those get reassigned between physical cameras. */
+  camera_id: z.string(),
+  camera_label: z.string(),
+  /** Database track id, so an alert can be traced back to the rows that produced it. */
+  track_id: z.string(),
+  cls: DetectedClass,
+  colour: z.string().nullable(),
+  colour_confidence: z.number().min(0).max(1).nullable(),
+  /** Set when the light was too poor for colour to be trusted. The UI must show the doubt. */
+  colour_uncertain: z.boolean().default(false),
+  /** Whatever characters were legible. Never padded, never guessed. */
+  partial_plate: z.string().nullable(),
+  /** L2-normalised appearance embedding, so cosine similarity is a dot product. */
+  embedding: z.array(z.number()),
+  embedding_model: z.string().nullable(),
+  /** Forensic time — what an operator sees and what cross-camera correlation uses. */
+  recorded_at_ms: z.number(),
+  /** Wall clock when this became known, so end-to-end alert latency can be measured for real. */
+  detected_at_ms: z.number(),
+});
+export type SignatureEvent = z.infer<typeof SignatureEvent>;
+
 export const BusEvent = z.discriminatedUnion('type', [
-  DetectionEvent, TrackEvent, PlateEvent, CameraHealthEvent,
+  DetectionEvent, TrackEvent, PlateEvent, CameraHealthEvent, SignatureEvent,
 ]);
 export type BusEvent = z.infer<typeof BusEvent>;

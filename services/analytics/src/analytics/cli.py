@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from . import db as dbmod
+from .bus import EventBus, now_ms
 from .pipeline import VEHICLE_CLASSES, Detector, run
 from .slot import DriftModel, fixture_recorded_at_ms
 from .signature import EMBEDDING_MODEL, OsnetEmbedder, build_signature
@@ -146,6 +147,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             confidence=args.confidence,
         )
         embedder = _load_embedder()
+        bus = EventBus()
         source = FrameSource(url, sample_fps=sample_fps, is_live=is_live,
                              max_reconnects=0 if not is_live else None)
 
@@ -178,15 +180,33 @@ def cmd_index(args: argparse.Namespace) -> int:
                 {"pts_ms": frame.pts_ms, "source": "fixture" if not is_live else "live"},
             )
 
+        def emit_signature(track, provisional: bool):
+            """Identify a vehicle and publish it. Called while in view, and again at close."""
+            track_id = writer.ensure_track(track)
+            signature = build_signature(track.cls, track.crops, embedder)
+            writer.write_signature(track_id, signature)
+            bus.publish_signature(
+                camera_id=camera_id,
+                camera_label=args.label or str(args.camera),
+                track_id=track_id,
+                signature=signature,
+                recorded_at_ms=track.last_recorded_at_ms,
+                detected_at_ms=now_ms(),
+            )
+
+        def on_signature_ready(tracks):
+            for track in tracks:
+                emit_signature(track, provisional=True)
+
         def on_track_closed(tracks):
-            track_ids = writer.close_tracks(tracks)
-            # One signature per track, written immediately after it. A track without a signature is
-            # invisible to cross-camera matching, so the two must not drift apart.
-            for track, track_id in zip(tracks, track_ids):
+            writer.close_tracks(tracks)
+            # The closing signature is built from every view collected, so it supersedes whatever
+            # was published provisionally. A track without a signature is invisible to cross-camera
+            # matching, so the two must not drift apart.
+            for track in tracks:
                 if track.cls not in VEHICLE_CLASSES:
                     continue  # People are indexed, but no appearance gallery is built for them.
-                signature = build_signature(track.cls, track.crops, embedder)
-                writer.write_signature(track_id, signature)
+                emit_signature(track, provisional=False)
 
         print(f"indexing {url}")
         print(f"  camera   : {camera_id}")
@@ -199,6 +219,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             on_detections=writer.stage,
             on_track_closed=on_track_closed,
             on_discontinuity=on_discontinuity,
+            on_signature_ready=on_signature_ready,
         )
 
         elapsed = time.time() - started
