@@ -52,6 +52,20 @@ test: ## Run every test suite
 typecheck: ## Typecheck all TypeScript packages
 	pnpm -r typecheck
 
+.PHONY: analytics-deps
+analytics-deps: ## Install the analytics toolchain and fetch model weights into ./models/
+	@PIP_CACHE_DIR=$(ROOT)/.cache/pip .venv/bin/pip install -q -r services/analytics/requirements.txt
+	@mkdir -p models .cache/ultralytics .cache/torch
+	@test -f models/yolov8n.pt || curl -sSL -o models/yolov8n.pt \
+	  https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt
+	@echo "analytics deps installed; weights in ./models/"
+
+.PHONY: index-fixture
+index-fixture: ## Index an offline development fixture into the live index (dev only)
+	@PYTHONPATH=$(ROOT)/services/analytics/src YOLO_CONFIG_DIR=$(ROOT)/.cache/ultralytics \
+	 TORCH_HOME=$(ROOT)/.cache/torch ANALYTICS_DEVICE=auto \
+	 .venv/bin/python -m analytics.cli index $(ARGS)
+
 .PHONY: xcheck-timing
 xcheck-timing: ## Prove the Python and TypeScript timing rules still agree
 	@scripts/xcheck-timing.sh

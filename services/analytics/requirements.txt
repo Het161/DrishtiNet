@@ -1,0 +1,24 @@
+# Analytics service dependencies.
+#
+# Everything the pipeline touches at run time must be listed here, including transitive packages
+# Ultralytics would otherwise fetch on first use. It auto-installed `lap` (the assignment solver
+# ByteTrack needs) the first time tracking ran — convenient on a laptop with a network, fatal at a
+# venue without one. The venue is offline by requirement, so nothing may be resolved at run time.
+#
+# Install with the repo-local caches so nothing lands in $HOME:
+#   make analytics-deps
+
+torch>=2.13
+torchvision>=0.28
+ultralytics>=8.4
+lap>=0.5.13            # ByteTrack's linear assignment — auto-fetched by Ultralytics if absent
+opencv-python>=4.10
+numpy>=2.0
+
+fastapi>=0.115
+uvicorn[standard]>=0.30
+psycopg[binary]>=3.2
+redis>=5.0
+
+pytest>=8.0
+pytest-asyncio>=0.24
