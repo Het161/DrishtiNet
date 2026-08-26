@@ -12,6 +12,7 @@
  * to the screen, because an operator acting on "white truck" deserves to know the light was too
  * poor to be sure.
  */
+import Link from 'next/link';
 import { useState, useTransition } from 'react';
 
 import type { SearchResult, SignatureHit } from '@/lib/forensics';
@@ -121,7 +122,15 @@ export function SignatureSearch({ initial, filters }: Props) {
             <tbody>
               {result.hits.map((hit: SignatureHit) => (
                 <tr key={hit.trackId} className="border-t border-[var(--color-border)]">
-                  <td className="px-4 py-2 capitalize">{hit.cls}</td>
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/operations/route/${hit.trackId}`}
+                      className="capitalize text-[var(--color-teal)] underline-offset-4 hover:underline"
+                      title="Reconstruct this vehicle's route across cameras"
+                    >
+                      {hit.cls}
+                    </Link>
+                  </td>
                   <td className="px-4 py-2">
                     <span className="flex items-center gap-1.5">
                       {hit.colour && (
