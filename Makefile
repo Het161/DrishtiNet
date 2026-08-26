@@ -58,6 +58,8 @@ analytics-deps: ## Install the analytics toolchain and fetch model weights into 
 	@mkdir -p models .cache/ultralytics .cache/torch
 	@test -f models/yolov8n.pt || curl -sSL -o models/yolov8n.pt \
 	  https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt
+	@test -f models/osnet_x0_25_msmt17.onnx || curl -sSL -o models/osnet_x0_25_msmt17.onnx \
+	  https://huggingface.co/anriha/osnet_x0_25_msmt17/resolve/main/osnet_x0_25_msmt17.onnx
 	@echo "analytics deps installed; weights in ./models/"
 
 .PHONY: index-fixture

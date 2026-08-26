@@ -18,8 +18,9 @@ import time
 from pathlib import Path
 
 from . import db as dbmod
-from .pipeline import Detector, run
+from .pipeline import VEHICLE_CLASSES, Detector, run
 from .slot import DriftModel, fixture_recorded_at_ms
+from .signature import EMBEDDING_MODEL, OsnetEmbedder, build_signature
 from .source import FrameSource
 
 log = logging.getLogger("analytics")
@@ -68,6 +69,25 @@ def _resolve_weights(configured: str) -> str | None:
         log.warning("configured detector %r is not present; using %s", configured, path.name)
         return str(path)
     return None
+
+
+def _load_embedder():
+    """
+    Load the appearance embedder, or run without one.
+
+    A missing re-ID model degrades the system to per-camera tracking rather than stopping it: the
+    index, alerts and search all still work, only cross-camera matching is lost. That is worth
+    saying out loud at start-up instead of failing, because the alternative on demo day is a service
+    that will not boot over a file that is not on the critical path.
+    """
+    path = REPO_ROOT / "models" / EMBEDDING_MODEL
+    if not path.exists():
+        log.warning(
+            "re-ID model %s not found — running without cross-camera matching. "
+            "Fetch it with `make analytics-deps`.", EMBEDDING_MODEL,
+        )
+        return None
+    return OsnetEmbedder(str(path))
 
 
 def _device() -> str:
@@ -125,6 +145,7 @@ def cmd_index(args: argparse.Namespace) -> int:
             imgsz=args.imgsz,
             confidence=args.confidence,
         )
+        embedder = _load_embedder()
         source = FrameSource(url, sample_fps=sample_fps, is_live=is_live,
                              max_reconnects=0 if not is_live else None)
 
@@ -158,7 +179,14 @@ def cmd_index(args: argparse.Namespace) -> int:
             )
 
         def on_track_closed(tracks):
-            writer.close_tracks(tracks)
+            track_ids = writer.close_tracks(tracks)
+            # One signature per track, written immediately after it. A track without a signature is
+            # invisible to cross-camera matching, so the two must not drift apart.
+            for track, track_id in zip(tracks, track_ids):
+                if track.cls not in VEHICLE_CLASSES:
+                    continue  # People are indexed, but no appearance gallery is built for them.
+                signature = build_signature(track.cls, track.crops, embedder)
+                writer.write_signature(track_id, signature)
 
         print(f"indexing {url}")
         print(f"  camera   : {camera_id}")
