@@ -1,0 +1,41 @@
+# Netlify deployment — the screening-committee preview, not the product.
+#
+# The product runs offline on one machine with `docker compose up`: Postgres+PostGIS, Redis,
+# MediaMTX, the Python analytics service and a long-lived SSE alerts service. None of that can exist
+# on serverless hosting, and the on-site evaluation has no internet anyway.
+#
+# What deploys here is the read side, which is genuinely the whole operator surface: the camera
+# registry and GIS, forensic search over the index, and cross-camera route reconstruction. All three
+# are Postgres queries. The live alert feed reports itself offline, because no service is holding an
+# SSE connection open — which is the truth, and the component already says so rather than showing a
+# frozen list as if it were live.
+
+[build]
+  base = "."
+  command = "pnpm --filter @drishtinet/web build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "22"
+  PNPM_VERSION = "9"
+  # Prisma needs to know it is generating for a serverless target.
+  PRISMA_GENERATE_SKIP_AUTOINSTALL = "true"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# The offline basemap is large and immutable — hash-named archives can be cached hard.
+[[headers]]
+  for = "/map/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/maplibre/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

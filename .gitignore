@@ -70,3 +70,6 @@ data/fixtures/
 
 # Python bytecode from the analytics service
 .pytest_cache/
+
+# Netlify link state (local, machine-specific)
+.netlify/

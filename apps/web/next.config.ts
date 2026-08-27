@@ -27,8 +27,10 @@ try {
 }
 
 const nextConfig: NextConfig = {
-  // Self-hosted, offline, one container. Never Vercel.
-  output: 'standalone',
+  // Self-hosted, offline, one container — that is the product, and `standalone` is what makes
+  // `docker compose up` work with no network. Netlify's Next runtime builds its own server and
+  // conflicts with it, so the one deployment that is not the product opts out.
+  output: process.env.NETLIFY ? undefined : 'standalone',
   reactStrictMode: true,
   poweredByHeader: false,
 
