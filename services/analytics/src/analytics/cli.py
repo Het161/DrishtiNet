@@ -123,7 +123,11 @@ def cmd_index(args: argparse.Namespace) -> int:
 
     sample_fps = float(os.environ.get("ANALYTICS_SAMPLE_FPS", "5"))
 
-    if args.fixture:
+    if args.url:
+        # A documented live endpoint. Treated as live in every respect: no seeking, PTS-driven
+        # timing, reconnect with backoff.
+        url, is_live = args.url, True
+    elif args.fixture:
         url, is_live = args.fixture, False
         if not Path(url).exists():
             print(f"fixture not found: {url}", file=sys.stderr)
@@ -243,6 +247,11 @@ def main(argv: list[str] | None = None) -> int:
     src = idx.add_mutually_exclusive_group(required=True)
     src.add_argument("--fixture", help="path to an offline development fixture")
     src.add_argument("--camera", help="portal id of a live camera, read via our MediaMTX")
+    src.add_argument(
+        "--url",
+        help="a live stream URL to read directly — the documented HLS endpoint when RTSP 8554 "
+             "is filtered on this network",
+    )
     idx.add_argument("--label", help="camera label — the identity; preferred over --camera")
     idx.add_argument("--seconds", type=float, default=0, help="stop after N seconds (0 = run on)")
     idx.add_argument("--imgsz", type=int, default=640)

@@ -65,7 +65,7 @@ one frame of its footage. That is Model 1, and it is what makes Model 4 affordab
 | Route reconstruction | — | **139–373 ms** |
 | Analytics, one camera | 5 fps | **25 sampled fps** |
 
-165 unit tests · 13 end-to-end tests · 12,549 detections indexed
+165 unit tests · 13 end-to-end tests · 12,969 detections indexed, including a live run
 
 ---
 
@@ -170,20 +170,25 @@ GIGW 3.0 + WCAG 2.1 AA · data residency in India
 
 ---
 
-## 13 · What we do not claim
+## 13 · Proven on the live grid
 
-- **No live-grid demonstration yet** — RTSP :8554 and WHEP :8889 do not answer from our network;
-  HLS media playlist returns 401. `/api/ingest` answers 200. Support report prepared.
-- All analytics results were produced on **offline development fixtures**, never presented as live
-- Government systems are **mocks**
-- The conformance suite has **not** run against the real grid
+**26 August — the organisers' own feed, not a fixture.**
 
-*We would rather state the gap than have an evaluator find it.*
+- Documented **HLS** endpoint reads after a cookie/session redirect
+- `ffprobe`: **H.264 1920×1080 @ 25 fps**
+- 45-second live run: **420 detections across 58 tracks**, written to the index as they happened
+- PTS advancing at a 40 ms median gap — real time, no running ahead
+
+RTSP `:8554` and WHEP `:8889` stay filtered from our network, so HLS is the path in use — which is
+precisely what the integration reference nominates for restricted networks.
 
 ---
 
-## 14 · Ask
+## 14 · What we do not claim
 
-Open **RTSP :8554** — or authorise the HLS media playlist — from participant networks.
+- **ANPR is not demonstrated on the government feed** — at this camera geometry a plate is ~41 px
+- **VAHAN, SARTHI, eGujCop, AFIS, NAFIS are mocks.** No live government access is held
+- **No facial recognition.** Documented integration-readiness only
+- The conformance suite runs against **our own self-test grid**, not the organisers'
 
-Everything else is built, tested and running offline today.
+*We would rather state the gap than have an evaluator find it.*

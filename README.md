@@ -70,7 +70,9 @@ Every figure below was produced by this build. Nothing here is aspirational.
 | Analytics throughput, one camera | 5 fps | **25 sampled fps** | 🟢 |
 | Re-ID separation *(same vs different vehicle)* | — | **0.950 vs 0.544** | 🟢 |
 
-**12,549** detections · **1,838** tracks · **957** vehicle signatures · **3** cameras indexed
+**12,969** detections · **1,896** tracks · **973** vehicle signatures · **3** cameras indexed
+
+*Including a live run against the organisers' grid over HLS — 420 detections in 45 seconds.*
 
 </div>
 
@@ -374,16 +376,17 @@ cannot survive.
 > [!IMPORTANT]
 > A submission that hides its edges invites the discovery of them.
 
-- **No live-grid demonstration yet.** RTSP `:8554` and WHEP `:8889` do not answer from our network —
-  they *hang* rather than refuse, the signature of a filtered port — and the documented HLS fallback
-  returns `401` on its media playlist. `/api/ingest` answers `200`, so the grid is up and we reach
-  it. All analytics results here were produced against **offline development fixtures**, and none is
-  presented as live.
+- **The live grid is reachable over HLS, and the pipeline runs on it.** Verified on 26 August:
+  the documented HLS endpoint returns the master and media playlists after a cookie/session
+  redirect, ffprobe reports H.264 1920x1080 at 25 fps, and a 45-second live run produced 420
+  detections across 58 tracks. RTSP `:8554` and WHEP `:8889` remain filtered from this network, so
+  HLS is the path in use — which is exactly what the reference nominates for restricted networks.
+- **ANPR is not demonstrated on the government feed**, for the geometric reason above: at this
+  camera geometry a plate is ~41 px wide.
 - **VAHAN, SARTHI, eGujCop, AFIS and NAFIS are local mocks.** No live government access is held or
-  implied. AFIS and NAFIS expose no lookup at all — only a readiness statement.
+  implied. AFIS and NAFIS expose no lookup at all.
 - **No facial recognition is implemented.** Documented integration-readiness only.
-- **The conformance suite has not run against the real grid**, because the grid has not been
-  reachable. It runs green against our own MediaMTX self-test loop.
+- **The conformance suite runs against our own MediaMTX self-test loop**, not against the grid.
 
 ---
 
