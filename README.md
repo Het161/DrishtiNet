@@ -80,7 +80,7 @@ Every figure below was produced by this build. Nothing here is aspirational.
 
 ```mermaid
 flowchart LR
-    subgraph GRID["🛰️ Organisers' grid — consume only"]
+    subgraph GRID["Organisers' grid - consume only"]
         direction TB
         RTSP["RTSP :8554"]
         WHEP["WHEP :8889"]
@@ -88,41 +88,50 @@ flowchart LR
         API["/api/ingest"]
     end
 
-    subgraph EDGE["⚙️ Ingest"]
-        GW["stream-gateway<br/><small>1 pull per camera · ≤5 concurrent<br/>lazy start · 60 s idle close</small>"]
+    subgraph EDGE["Ingest"]
+        direction TB
+        GW["stream-gateway<br/>1 pull per camera, max 5<br/>lazy start, 60s idle close"]
         MTX["our MediaMTX"]
-        RING[("evidence ring<br/>buffer")]
     end
 
-    subgraph BRAIN["🧠 Analytics"]
-        SAMP["PTS-grid sampler<br/><small>4–5 fps, nearest frame</small>"]
+    subgraph BRAIN["Analytics"]
+        direction TB
+        SAMP["PTS-grid sampler<br/>4-5 fps"]
         YOLO["YOLO + ByteTrack"]
-        SIG["vehicle signature<br/><small>class · colour · 512-d embedding</small>"]
+        SIG["vehicle signature<br/>class, colour, 512-d embedding"]
     end
 
-    subgraph REACT["🚨 Alerting"]
-        BUS{{"Redis Streams"}}
-        ALERTS["alerts engine<br/><small>watchlist · priority</small>"]
-        MOCK["integrations<br/><small>MOCK: VAHAN · SARTHI<br/>eGujCop · AFIS · NAFIS</small>"]
+    subgraph REACT["Alerting"]
+        direction TB
+        BUS["Redis Streams"]
+        ALERTS["alerts engine<br/>watchlist, priority"]
+        MOCK["integrations<br/>MOCK: VAHAN, SARTHI,<br/>eGujCop, AFIS, NAFIS"]
     end
 
-    subgraph UI["🖥️ Operator"]
-        WALL["live tile<br/>(WHEP)"]
-        OPS["operations<br/><small>alerts + search</small>"]
-        ROUTE["route<br/>reconstruction"]
+    subgraph UI["Operator"]
+        direction TB
+        WALL["live tile - WHEP"]
+        OPS["operations<br/>alerts + search"]
+        ROUTE["route reconstruction"]
     end
 
-    DB[("PostgreSQL + PostGIS<br/><small>registry · index · alerts · audit</small>")]
+    RING["evidence ring buffer"]
+    DB["PostgreSQL + PostGIS<br/>registry, index, alerts, audit"]
 
-    RTSP & WHEP & HLS --> GW
-    API -.->|catalogue| GW
+    RTSP --> GW
+    WHEP --> GW
+    HLS --> GW
+    API --> GW
     GW --> MTX
     MTX --> RING
-    MTX --> SAMP --> YOLO --> SIG
+    MTX --> SAMP
     MTX --> WALL
-    SIG --> BUS --> ALERTS
-    ALERTS -.->|enrich| MOCK
-    ALERTS -->|SSE| OPS
+    SAMP --> YOLO
+    YOLO --> SIG
+    SIG --> BUS
+    BUS --> ALERTS
+    ALERTS --> MOCK
+    ALERTS --> OPS
     SIG --> DB
     DB --> OPS
     DB --> ROUTE
@@ -156,7 +165,7 @@ sequenceDiagram
     participant O as Operator
 
     C->>G: RTSP over TCP (forced)
-    Note over G: replays buffered GOP<br/>first 1–2 s arrive faster than real time
+    Note over G: replays buffered GOP - first 1-2s<br/>arrive faster than real time
     G->>A: frames via our MediaMTX
     Note over A: anchor = min(arrival − PTS)<br/>only after the burst settles
     A->>A: PTS-grid sample → detect → track
@@ -194,12 +203,14 @@ alert at all.
 
 ```mermaid
 flowchart LR
-    T["finished track"] --> CLS["class<br/><small>car · truck · bus · motorcycle</small>"]
-    T --> COL["colour<br/><small>+ uncertainty flag</small>"]
-    T --> EMB["512-d OSNet embedding<br/><small>MIT · ONNX · 0.9 MB</small>"]
-    CLS & COL & EMB --> SIG(["vehicle signature"])
-    SIG --> M{"match"}
-    PLATE["partial plate<br/><small>when legible</small>"] -.->|corroborates| M
+    T["finished track"] --> CLS["class<br/>car, truck, bus, motorcycle"]
+    T --> COL["colour<br/>plus uncertainty flag"]
+    T --> EMB["512-d OSNet embedding<br/>MIT, ONNX, 0.9 MB"]
+    CLS --> SIG["vehicle signature"]
+    COL --> SIG
+    EMB --> SIG
+    SIG --> M["match"]
+    PLATE["partial plate<br/>when legible"] --> M
     classDef a fill:#121722,stroke:#2DD4BF,color:#E6EAF2
     classDef b fill:#1B2230,stroke:#FF8A3D,color:#E6EAF2
     class T,CLS,COL,EMB,SIG a
@@ -231,16 +242,16 @@ therefore requires **four** things:
 
 ```mermaid
 flowchart TD
-    S["candidate sighting"] --> A{"looks the same?<br/><small>cosine ≥ 0.82</small>"}
+    S["candidate sighting"] --> A{"looks the same?<br/>cosine >= 0.82"}
     A -->|no| X1["rejected"]
     A -->|yes| B{"same class?"}
     B -->|no| X2["rejected"]
-    B -->|yes| C{"later in<br/>forensic time?"}
+    B -->|yes| C{"later in forensic time?"}
     C -->|no| X3["rejected"]
-    C -->|yes| D{"could it have<br/>got there?<br/><small>< 140 km/h</small>"}
-    D -->|no| X4["rejected as<br/>physically impossible"]
-    D -->|unknown position| U["kept, shown as<br/><b>not verifiable</b>"]
-    D -->|yes| OK(["joins the route"])
+    C -->|yes| D{"could it get there?<br/>under 140 km/h"}
+    D -->|no| X4["physically impossible"]
+    D -->|no position| U["kept, flagged<br/>not verifiable"]
+    D -->|yes| OK["joins the route"]
     classDef ok fill:#102A28,stroke:#2DD4BF,color:#E6EAF2
     classDef no fill:#2E1516,stroke:#EF4444,color:#E6EAF2
     classDef warn fill:#2C2110,stroke:#F59E0B,color:#E6EAF2
@@ -277,17 +288,14 @@ shifted every id above it down by one — silently repointing **13 ids at differ
 
 ```mermaid
 flowchart LR
-    subgraph BEFORE["before 21 Aug"]
-        B17["id 17 → Rajkot CCTV"]
-        B18["id 18 → camera X"]
-    end
-    subgraph AFTER["after"]
-        A17["id 17 → camera X"]
-        A18["id 18 → camera Y"]
-    end
-    BEFORE --> AFTER
-    AFTER --> BAD["keyed on portal_id:<br/><b>13 cameras silently wrong</b>"]
-    AFTER --> GOOD["keyed on label:<br/><b>reconciled, audited</b>"]
+    B17["id 17 = Rajkot CCTV"] --> R["camera removed<br/>every id above shifts down"]
+    B18["id 18 = camera X"] --> R
+    R --> A17["id 17 now = camera X"]
+    R --> A18["id 18 now = camera Y"]
+    A17 --> BAD["keyed on portal_id<br/>13 cameras silently wrong"]
+    A18 --> BAD
+    A17 --> GOOD["keyed on label<br/>reconciled and audited"]
+    A18 --> GOOD
     classDef bad fill:#2E1516,stroke:#EF4444,color:#E6EAF2
     classDef good fill:#102A28,stroke:#2DD4BF,color:#E6EAF2
     class BAD bad
