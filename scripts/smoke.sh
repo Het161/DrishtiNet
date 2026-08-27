@@ -17,6 +17,7 @@ set -a; [ -f .env ] && . ./.env; set +a
 WEB_PORT=${WEB_PORT:-3000}
 STREAM_GATEWAY_PORT=${STREAM_GATEWAY_PORT:-4001}
 ALERTS_PORT=${ALERTS_PORT:-4002}
+INTEGRATIONS_PORT=${INTEGRATIONS_PORT:-4003}
 
 LOG=.cache/smoke.log
 mkdir -p .cache
@@ -29,7 +30,7 @@ cleanup() {
     kill -- "-$STACK_PID" 2>/dev/null || kill "$STACK_PID" 2>/dev/null
   fi
   # Belt and braces — anything of ours still holding a port goes too.
-  for port in "$WEB_PORT" "$STREAM_GATEWAY_PORT" "$ALERTS_PORT"; do
+  for port in "$WEB_PORT" "$STREAM_GATEWAY_PORT" "$ALERTS_PORT" "$INTEGRATIONS_PORT"; do
     for pid in $(lsof -ti:"$port" -sTCP:LISTEN 2>/dev/null); do
       local cwd
       cwd=$(lsof -p "$pid" -a -d cwd -Fn 2>/dev/null | grep '^n' | sed 's/^n//')
@@ -76,6 +77,7 @@ check "web /registry"    "http://localhost:${WEB_PORT}/registry"        || failu
 check "gateway /health"  "http://localhost:${STREAM_GATEWAY_PORT}/health" || failures=$((failures+1))
 check "gateway /cameras" "http://localhost:${STREAM_GATEWAY_PORT}/cameras" || failures=$((failures+1))
 check "alerts /health"   "http://localhost:${ALERTS_PORT}/health"       || failures=$((failures+1))
+check "integrations"     "http://localhost:${INTEGRATIONS_PORT}/health" || failures=$((failures+1))
 
 echo
 if grep -qE "Unhandled error event|ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL|EADDRINUSE" "$LOG"; then

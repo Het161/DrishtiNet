@@ -13,6 +13,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { connect } from 'node:net';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -104,6 +105,44 @@ function suggestFree(from, reserved, taken) {
   while (reserved.has(candidate) || taken.has(candidate)) candidate += 1;
   taken.add(candidate);
   return candidate;
+}
+
+/**
+ * Are the backing services up?
+ *
+ * Postgres and Redis stop with the Docker daemon, and the daemon stops on its own — three times in
+ * one working session here. The failure that follows is not obviously about that: the app starts
+ * fine, then every page 500s on a Prisma connection error, and the alerts service reports an empty
+ * bus. Saying it up front costs one TCP probe and saves reading a stack trace to rediscover it.
+ */
+async function checkBackingServices() {
+  const services = [
+    { name: 'Postgres', port: Number(process.env.POSTGRES_PORT ?? 5433) },
+    { name: 'Redis', port: Number(process.env.REDIS_PORT ?? 6380) },
+  ];
+  const down = [];
+  for (const s of services) {
+    const reachable = await new Promise((resolve) => {
+      const socket = connect({ port: s.port, host: '127.0.0.1' });
+      const done = (ok) => { socket.destroy(); resolve(ok); };
+      socket.setTimeout(1200);
+      socket.once('connect', () => done(true));
+      socket.once('timeout', () => done(false));
+      socket.once('error', () => done(false));
+    });
+    if (!reachable) down.push(s);
+  }
+  return down;
+}
+
+const backingDown = await checkBackingServices();
+if (backingDown.length > 0) {
+  console.error('\nThe backing services are not running.\n');
+  for (const s of backingDown) console.error(`  ${s.name} is not answering on port ${s.port}`);
+  console.error('\nThe app would start and then fail on every database query. Start them first:\n');
+  console.error('  make infra\n');
+  console.error('If that fails, the Docker daemon is probably stopped — open Docker Desktop.\n');
+  process.exit(1);
 }
 
 const busy = [];
