@@ -224,6 +224,11 @@ flowchart LR
 | Same vehicle, different frames | **0.950** |
 | Different vehicles | **0.544** |
 
+> This is a **separation** measurement, not an accuracy. "Same vehicle" means the tracker assigned
+> the same id, and there is no hand-labelled ground truth in this repository — so no precision or
+> recall figure appears anywhere in this submission. What is and is not measured is set out in
+> [docs/analytics_quality.md](docs/analytics_quality.md).
+
 ---
 
 ## Routes respect geography, not just resemblance

@@ -150,6 +150,9 @@ What identifies a vehicle instead is class + colour + a 512-dimension OSNet appe
 | Same vehicle, different frames | **0.950** |
 | Different vehicles | **0.544** |
 
+Every analytics figure in this document, and what each one is and is not evidence of, is set
+out in [analytics_quality.md](analytics_quality.md).
+
 **Colour states its own doubt.** Below a measured brightness threshold the signature sets
 `colour_uncertain`, and the interface shows it. Verified selective rather than decorative: 0 of 138
 signatures flagged in daylight, 13 of 146 at night.

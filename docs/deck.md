@@ -99,6 +99,10 @@ OSNet x0.25 · MSMT17 · MIT licence · ONNX · 0.9 MB
 *Plate is corroboration when legible, never the primary key. That ordering is forced by the
 measurement on the previous slide.*
 
+*This is **separation**, not accuracy: "same vehicle" means the tracker assigned the same id, and no
+hand-labelled set exists. No precision or recall figure appears anywhere in this submission, because
+computing one would need labels we do not have. See docs/analytics_quality.md.*
+
 ---
 
 ## 8 · Honesty is a feature

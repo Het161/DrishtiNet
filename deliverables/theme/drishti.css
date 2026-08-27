@@ -1,0 +1,142 @@
+/* @theme drishti */
+
+/*
+ * Slide theme, using the product's own design tokens.
+ *
+ * The deck is looked at beside the running system, so it should look like it. Colours, type scale
+ * and radii come straight from CLAUDE.md rather than being invented for the presentation — a deck
+ * in a different palette reads as marketing produced separately from the build.
+ *
+ * Dark, because the product is a control-room interface and because the projector at the venue is
+ * an unknown: high contrast on a dark ground survives a washed-out room better than the reverse.
+ */
+
+@import 'default';
+
+:root {
+  --base: #0b0e14;
+  --surface: #121722;
+  --elevated: #1b2230;
+  --border: #273042;
+  --text: #e6eaf2;
+  --muted: #8a93a6;
+  --teal: #2dd4bf;
+  --saffron: #ff8a3d;
+  --critical: #ef4444;
+  --high: #f59e0b;
+}
+
+section {
+  background: var(--base);
+  color: var(--text);
+  font-family: Inter, -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-size: 26px;
+  line-height: 1.5;
+  padding: 64px 72px;
+  letter-spacing: -0.005em;
+}
+
+h1 {
+  color: var(--text);
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0 0 8px;
+}
+
+h2 {
+  color: var(--text);
+  font-size: 38px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 24px;
+  /* The rule under a heading gives every slide the same optical starting line. */
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 14px;
+}
+
+h3 {
+  color: var(--saffron);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 16px;
+}
+
+strong { color: var(--text); font-weight: 700; }
+em { color: var(--muted); font-style: italic; }
+a { color: var(--teal); }
+
+/* Speaker asides. Deliberately quieter than the body: they support a claim, never make one. */
+p > em:only-child {
+  display: block;
+  color: var(--muted);
+  font-size: 22px;
+  border-left: 2px solid var(--border);
+  padding-left: 18px;
+  margin-top: 26px;
+}
+
+blockquote {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--saffron);
+  border-radius: 12px;
+  padding: 22px 26px;
+  margin: 22px 0;
+  font-size: 24px;
+}
+blockquote h3 { color: var(--text); text-transform: none; letter-spacing: -0.01em; font-size: 30px; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 22px;
+  margin: 18px 0;
+}
+th {
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  padding: 10px 16px;
+  background: var(--elevated);
+}
+td {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  /* Figures line up in columns; proportional digits would make them ragged. */
+  font-variant-numeric: tabular-nums;
+}
+
+ul { margin: 12px 0; }
+li { margin: 10px 0; }
+li::marker { color: var(--teal); }
+
+code {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  background: var(--elevated);
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 0.86em;
+}
+
+/* Cover slide. */
+section.lead { justify-content: center; }
+section.lead h1 { font-size: 78px; }
+section.lead h2 { border: 0; color: var(--muted); font-size: 30px; font-weight: 500; padding: 0; }
+
+section::after {
+  color: var(--muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 15px;
+}
+
+/* Marp renders a horizontal rule where the source separates slides; nothing should show. */
+hr { display: none; }
