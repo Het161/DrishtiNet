@@ -8,16 +8,24 @@ import { getSession, can } from '@/lib/auth';
 import { logoutAction } from '@/app/actions/auth';
 import { getTimeContext } from '@/lib/time-shift';
 import { translator } from '@/lib/i18n';
+import { NoDatabaseNotice } from '@/components/NoDatabaseNotice';
 
 // The registry reflects live camera health, so it must never be statically cached.
 export const dynamic = 'force-dynamic';
 
 export default async function RegistryPage() {
-  const [data, pmtiles, session] = await Promise.all([
-    getRegistry(),
-    hasPmtilesArchives(),
-    getSession(),
-  ]);
+  // A hosted preview has no database. Degrade to an explanation rather than a 500 — the link may be
+  // the first thing a screening committee opens.
+  let data, pmtiles, session;
+  try {
+    [data, pmtiles, session] = await Promise.all([
+      getRegistry(),
+      hasPmtilesArchives(),
+      getSession(),
+    ]);
+  } catch {
+    return <NoDatabaseNotice page="The camera registry" />;
+  }
   const time = getTimeContext();
   const tr = translator('en');
 

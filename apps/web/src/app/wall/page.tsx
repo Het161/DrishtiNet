@@ -13,13 +13,21 @@ import Link from 'next/link';
 
 import { getRegistry } from '@/lib/registry';
 import { VideoWall } from '@/components/VideoWall';
+import { NoDatabaseNotice } from '@/components/NoDatabaseNotice';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_OPEN = Number(process.env.LIVE_PULL_MAX ?? 5);
 
 export default async function WallPage() {
-  const registry = await getRegistry();
+  // A hosted preview has no database. Degrade to an explanation rather than a 500 — the link may
+  // be the first thing a screening committee opens.
+  let registry;
+  try {
+    registry = await getRegistry();
+  } catch {
+    return <NoDatabaseNotice page="The video wall" />;
+  }
 
   return (
     <main className="mx-auto max-w-[1600px] px-6 py-6">

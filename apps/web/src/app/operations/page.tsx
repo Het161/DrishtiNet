@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { indexSummary, recentAlerts, availableFilters, searchSignatures } from '@/lib/forensics';
 import { AlertFeed } from '@/components/AlertFeed';
 import { SignatureSearch } from '@/components/SignatureSearch';
+import { NoDatabaseNotice } from '@/components/NoDatabaseNotice';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,12 +26,18 @@ function Stat({ value, label, hint }: { value: string; label: string; hint?: str
 }
 
 export default async function OperationsPage() {
-  const [summary, alerts, filters, initial] = await Promise.all([
+  // A hosted preview has no database. Degrade to an explanation rather than a 500.
+  let summary, alerts, filters, initial;
+  try {
+    [summary, alerts, filters, initial] = await Promise.all([
     indexSummary(),
     recentAlerts(50),
     availableFilters(),
-    searchSignatures({ limit: 60 }),
-  ]);
+      searchSignatures({ limit: 60 }),
+    ]);
+  } catch {
+    return <NoDatabaseNotice page="Operations" />;
+  }
 
   const empty = summary.tracks === 0;
 
