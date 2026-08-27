@@ -20,7 +20,25 @@ const PRIORITY_COLOUR: Record<string, string> = {
 
 const ALERTS_URL = process.env.NEXT_PUBLIC_ALERTS_URL ?? 'http://localhost:4002';
 
-type Connection = 'connecting' | 'live' | 'offline';
+type Connection = 'connecting' | 'live' | 'offline' | 'unavailable';
+
+/**
+ * Should this browser try to open the alert stream at all?
+ *
+ * The default points at localhost, which is correct when the whole stack is running on the viewer's
+ * own machine and actively wrong anywhere else — a hosted preview would have every visitor's browser
+ * dialling their own port 4002, reaching either nothing or something of theirs. Neither is ours to
+ * touch, and the resulting failure would read as our service being down.
+ *
+ * So a localhost stream is only attempted from a localhost page. Anywhere else without an explicit
+ * URL says the live feed is unavailable, which is the truth: no service is holding the connection.
+ */
+function streamIsReachable(): boolean {
+  if (typeof window === 'undefined') return false;
+  const configured = process.env.NEXT_PUBLIC_ALERTS_URL;
+  if (configured) return true;
+  return ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+}
 
 export function AlertFeed({ initial }: { initial: RecentAlert[] }) {
   const [alerts, setAlerts] = useState<RecentAlert[]>(initial);
@@ -28,6 +46,11 @@ export function AlertFeed({ initial }: { initial: RecentAlert[] }) {
   const seen = useRef(new Set(initial.map((a) => a.id)));
 
   useEffect(() => {
+    if (!streamIsReachable()) {
+      setConnection('unavailable');
+      return;
+    }
+
     const source = new EventSource(`${ALERTS_URL}/stream`);
 
     source.onopen = () => setConnection('live');
@@ -66,17 +89,26 @@ export function AlertFeed({ initial }: { initial: RecentAlert[] }) {
                   ? 'var(--color-teal)'
                   : connection === 'connecting'
                     ? 'var(--color-muted)'
-                    : 'var(--color-critical)',
+                    : connection === 'unavailable'
+                      ? 'var(--color-muted)'
+                      : 'var(--color-critical)',
             }}
           />
-          {connection === 'live' ? 'live' : connection === 'connecting' ? 'connecting…' : 'feed offline'}
+          {connection === 'live'
+            ? 'live'
+            : connection === 'connecting'
+              ? 'connecting…'
+              : connection === 'unavailable'
+                ? 'live feed not in this preview'
+                : 'feed offline'}
         </span>
       </header>
 
       {alerts.length === 0 ? (
         <p className="px-4 py-6 text-sm text-[var(--color-muted)]">
-          No alerts raised. The watchlist is being matched against every vehicle signature as it is
-          written; nothing has matched yet.
+          {connection === 'unavailable'
+            ? 'Alerts already raised are listed here. The live stream needs the alerts service, which runs with the full offline stack.'
+            : 'No alerts raised. The watchlist is being matched against every vehicle signature as it is written; nothing has matched yet.'}
         </p>
       ) : (
         <ul className="max-h-[720px] divide-y divide-[var(--color-border)] overflow-y-auto">
