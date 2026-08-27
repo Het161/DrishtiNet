@@ -38,6 +38,12 @@ import { playbackPositionSeconds, secondsUntilLoop, now as projectNow } from './
 import { POLITENESS, type CameraSource, type HealthStatus } from './adapters/types.js';
 
 /** The slice of ChildProcess we use, so tests can substitute a fake without spawning anything. */
+/** The catalogue fields a live pull needs. CameraConfigEntry satisfies this. */
+export interface CameraConfigLike extends CameraSource {
+  rtspUrl?: string | null;
+  hlsUrl?: string | null;
+}
+
 export interface SpawnedProcess {
   stderr: {
     setEncoding(encoding: string): void;
@@ -144,6 +150,8 @@ export class FfmpegPublisher {
   private readonly cameras = new Map<string, CameraSource>();
   private readonly stopping = new Set<string>();
   private readonly idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** How far down the RTSP -> HLS chain each camera has had to fall. */
+  private readonly liveSourceIndex = new Map<string, number>();
   private driftTimer: ReturnType<typeof setInterval> | null = null;
 
   private readonly idleTimeoutMs: number;
@@ -310,9 +318,88 @@ export class FfmpegPublisher {
 
   /* ── process supervision ────────────────────────────────────────────────── */
 
+  /** Absolute URLs pass through; catalogue-relative paths hang off the portal's base. */
+  private resolveUpstream(url: string): string {
+    if (/^[a-z]+:\/\//i.test(url)) return url;
+    return `${this.cfg.upstreamBase.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`;
+  }
+
   private upstreamUrl(camera: CameraSource): string {
     if (/^https?:\/\//i.test(camera.sourceUrl)) return camera.sourceUrl;
     return `${this.cfg.upstreamBase.replace(/\/$/, '')}${camera.sourceUrl}`;
+  }
+
+  /**
+   * Which upstream URL to try for a live camera.
+   *
+   * The documented chain is RTSP over TCP first, then HLS. On our network RTSP :8554 and WHEP :8889
+   * hang rather than refuse — the signature of a filtered port — while HLS on 443 serves. Rather
+   * than hardcode either, the chain is walked in order and the working one is remembered, so the
+   * same build works from a venue where 8554 is open and from a network where it is not.
+   */
+  liveSourceFor(camera: CameraConfigLike): { url: string; kind: 'rtsp' | 'hls' } | null {
+    const attempt = this.liveSourceIndex.get(camera.id) ?? 0;
+
+    // A filtered port hangs rather than refusing, so discovering it costs a full timeout per
+    // camera. LIVE_SOURCE_PREFER lets a network where that answer is already known skip straight to
+    // the protocol that works — which on ours is HLS. The chain still exists underneath, so the
+    // same build discovers the right path unaided at a venue where 8554 is open.
+    const prefer = process.env.LIVE_SOURCE_PREFER;
+    const chain: { url: string | null | undefined; kind: 'rtsp' | 'hls' }[] =
+      prefer === 'hls'
+        ? [{ url: camera.hlsUrl, kind: 'hls' }, { url: camera.rtspUrl, kind: 'rtsp' }]
+        : [{ url: camera.rtspUrl, kind: 'rtsp' }, { url: camera.hlsUrl, kind: 'hls' }];
+    const usable = chain
+      .filter((c): c is { url: string; kind: 'rtsp' | 'hls' } => !!c.url)
+      // The catalogue stores HLS as a path (`/live/stream/10/index.m3u8`) and RTSP as an absolute
+      // URL. Passing the path straight to ffmpeg makes it look for a local file, which fails in a
+      // way that looks like the camera being down rather than a URL never being resolved.
+      .map((c) => ({ ...c, url: this.resolveUpstream(c.url) }));
+    if (usable.length === 0) return null;
+    return usable[Math.min(attempt, usable.length - 1)]!;
+  }
+
+  /** Move to the next source in the chain after a failure. */
+  advanceLiveSource(cameraId: string): void {
+    this.liveSourceIndex.set(cameraId, (this.liveSourceIndex.get(cameraId) ?? 0) + 1);
+  }
+
+  /**
+   * FFmpeg arguments for a genuinely live source.
+   *
+   * Two flags from the progressive-file era must not appear here, and their absence is the point:
+   *
+   *   `-ss`  seeks. A live stream has nothing to seek into — the organisers' reference says so
+   *          plainly — and asking would either fail or silently return the wrong moment.
+   *   `-re`  paces a *file* at real time. The source is already real time, so this fights the
+   *          stream's own clock and accumulates drift.
+   */
+  buildLiveArgs(camera: CameraConfigLike): string[] {
+    const source = this.liveSourceFor(camera);
+    if (!source) throw new Error(`camera ${camera.id} has no live URL in the catalogue`);
+
+    const args = ['-hide_banner', '-loglevel', 'warning', '-nostdin',
+      '-user_agent', POLITENESS.userAgent];
+
+    if (source.kind === 'rtsp') {
+      // UDP through NAT loses packets and produces corrupt frames that look like model bugs.
+      args.push('-rtsp_transport', 'tcp', '-rtsp_flags', 'prefer_tcp');
+    } else {
+      // The HLS endpoint answers only after a cookie/session redirect.
+      args.push('-cookies', '', '-reconnect', '1', '-reconnect_streamed', '1',
+        '-reconnect_delay_max', '10');
+    }
+
+    args.push(
+      '-fflags', '+genpts',
+      '-rw_timeout', '20000000',
+      '-i', source.url,
+      '-an',                    // surveillance audio is absent or useless, and MediaMTX prefers none
+      '-c:v', 'copy',           // never re-encode: it would cost CPU and change nothing useful
+      '-f', 'rtsp', '-rtsp_transport', 'tcp',
+      this.rtspUrl(camera.id),
+    );
+    return args;
   }
 
   buildArgs(camera: CameraSource, position: number): string[] {
@@ -364,13 +451,27 @@ export class FfmpegPublisher {
         nowMs: this.now(),
       });
 
-      state.seekedTo = position;
+      // A live source is not a file: it cannot be seeked, and pacing it is harmful. The two paths
+      // are kept apart so neither can borrow the other's assumptions.
+      const live = camera.sourceType !== 'MP4_PROGRESSIVE';
+      const source = live ? this.liveSourceFor(camera as CameraConfigLike) : null;
+
       state.startedAt = this.now();
       state.status = 'unknown';
       state.driftSeconds = null;
-      state.detail = `seeking to ${position.toFixed(1)}s`;
 
-      const proc = this.spawnFn(this.cfg.ffmpegPath ?? 'ffmpeg', this.buildArgs(camera, position));
+      let args: string[];
+      if (live && source) {
+        state.seekedTo = null;
+        state.detail = `connecting over ${source.kind}`;
+        args = this.buildLiveArgs(camera as CameraConfigLike);
+      } else {
+        state.seekedTo = position;
+        state.detail = `seeking to ${position.toFixed(1)}s`;
+        args = this.buildArgs(camera, position);
+      }
+
+      const proc = this.spawnFn(this.cfg.ffmpegPath ?? 'ffmpeg', args);
       this.procs.set(camera.id, proc);
 
       const exitCode = await this.superviseProcess(proc, state);
@@ -394,6 +495,11 @@ export class FfmpegPublisher {
 
       state.consecutiveFailures += 1;
       state.status = 'offline';
+      // A live source that will not connect is usually a blocked port, not a broken camera, so try
+      // the next protocol the reference documents before giving up on the camera itself.
+      if (camera.sourceType !== 'MP4_PROGRESSIVE') {
+        this.advanceLiveSource(camera.id);
+      }
       const backoff =
         POLITENESS.retryBackoffMs[
           Math.min(state.consecutiveFailures - 1, POLITENESS.retryBackoffMs.length - 1)

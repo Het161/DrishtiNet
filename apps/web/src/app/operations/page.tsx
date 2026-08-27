@@ -44,6 +44,12 @@ export default async function OperationsPage() {
           </p>
         </div>
         <Link
+          href="/wall"
+          className="mr-4 text-sm text-[var(--color-teal)] underline underline-offset-4"
+        >
+          Video wall
+        </Link>
+        <Link
           href="/registry"
           className="text-sm text-[var(--color-teal)] underline underline-offset-4"
         >

@@ -34,6 +34,12 @@ export default async function RegistryPage() {
           <nav className="flex items-center gap-3 text-xs">
             <span className="text-[var(--color-border)]">|</span>
             <Link
+              href="/wall"
+              className="text-[var(--color-teal)] underline-offset-4 hover:underline"
+            >
+              Video wall
+            </Link>
+            <Link
               href="/operations"
               className="text-[var(--color-teal)] underline-offset-4 hover:underline"
             >
