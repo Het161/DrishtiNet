@@ -12,11 +12,10 @@ torch>=2.13
 torchvision>=0.28
 ultralytics>=8.4
 lap>=0.5.13            # ByteTrack's linear assignment — auto-fetched by Ultralytics if absent
+onnxruntime>=1.20      # runs the OSNet re-ID model; imported by signature.py
 opencv-python>=4.10
 numpy>=2.0
 
-fastapi>=0.115
-uvicorn[standard]>=0.30
 psycopg[binary]>=3.2
 redis>=5.0
 
