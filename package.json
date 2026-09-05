@@ -22,6 +22,7 @@
     "logs": "docker compose -f infra/docker-compose.yml logs -f"
   },
   "devDependencies": {
+    "@marp-team/marp-cli": "^4.5.0",
     "typescript": "^5.7.3"
   },
   "dependencies": {
