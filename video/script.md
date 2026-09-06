@@ -1,6 +1,6 @@
 # Demo recording script — government feed
 
-**4 min 30 s.** Read the bold instruction, do it, then read the quoted text aloud.
+**About 3 minutes.** Read the bold instruction, do it, then read the quoted text aloud.
 Team Anveshan · DrishtiNet · Gujarat Police Innovation Challenge 2026
 
 Everything here is on a screen that exists. Nothing is described that the build does not do.
@@ -17,11 +17,16 @@ npm run dev             # note the port it prints — 3000 or 3001
 
 Sign in at `/login` as **admin** / **drishti_dev_only**.
 
-Check the grid is up — if this does not print JSON, stop and try later:
+Confirm the index has data — must print non-zero:
 
 ```bash
-curl -s https://live.corp8.cloud/api/ingest | head -c 200
+set -a && . ./.env && set +a
+docker exec drishti-postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+  "select 'detections '||(select count(*) from detections)||', signatures '||(select count(*) from vehicle_signatures);"
 ```
+
+The organisers closed their grid behind a login on 6 September, so no live tiles will play. That is
+covered in the script and does not stop the recording.
 
 Open three tabs: **`/registry`** · **`/wall`** · **`/operations`**
 Browser zoom 110–125 %. OBS: 1920×1080, 30 fps, ~10 Mbps, capture the browser window only.
@@ -210,13 +215,13 @@ curl -s localhost:4003/vahan/GJ01AB1234 | head -20
 
 | What you see | What it means | Fix |
 |---|---|---|
-| Tile will not open | Grid may be down | Check `/api/ingest` still answers. If not, stop — record later |
+| Tiles say "upstream unavailable" | Expected — the grid closed on 6 Sep | Nothing to fix; the script covers it |
 | "no database" on a page | Docker stopped | `make infra`, reload |
 | Alerts say "feed offline" | Redis down | `make infra`, reload |
 | Port already in use | Another dev server | Follow what the preflight prints |
 
-**Do not** speed up, cut away from, or re-time the live video tile. If it stutters, that is the
-network — and it is more honest than an edit.
+**Never call anything on screen "live".** The index was built from the organisers' feed while it was
+open, including a live run on 26 August, and that is exactly how it should be described.
 
 ## Do not demonstrate these — say them if asked
 
