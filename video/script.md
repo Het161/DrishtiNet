@@ -47,59 +47,23 @@ Browser zoom 110–125 %. OBS: 1920×1080, 30 fps, ~10 Mbps, capture the browser
 
 # 0:20
 
-### ▶ SWITCH TO: your terminal
-
-**Type and run:**
-
-```bash
-curl -s https://live.corp8.cloud/api/ingest | head -c 300
-```
-
-**Let the JSON sit on screen while you say:**
-
-> "The catalogue is the contract, not the URL pattern — so everything starts here. Thirty cameras,
-> each with its id, codec, live status, and all three stream URLs.
->
-> On this network the RTSP port and the WebRTC port do not answer. They hang rather than refuse,
-> which is what a filtered port looks like. So our gateway falls through to the HLS endpoint the
-> integration reference nominates for restricted networks — and that one works."
-
----
-
-# 0:50
-
 ### ▶ SWITCH TO: `/wall`
 
-**Click "Open live" on the first camera tile. Wait for the picture to appear.**
+**Do not click anything. Let the amber banner sit on screen while you speak.**
 
-> "That is a live camera on the organisers' grid, playing in this browser."
-
-**Now stop talking. Let the video run for five full seconds.**
-
-> "It is not connected directly. One pull per camera goes into our own media server, and every
-> viewer reads from us — so fifty operators watching this junction is still one connection to their
-> infrastructure.
+> "This is the video wall — twenty-nine cameras from the organisers' grid.
 >
-> Tiles never open by themselves, and at most five cameras are pulled at once. That is a politeness
-> limit, not a performance one: each client gets its own copy of their stream."
-
----
-
-# 1:20
-
-### ▶ SWITCH TO: your terminal
-
-**Run this and leave it running in the background:**
-
-```bash
-make index-fixture ARGS='--url "https://live.corp8.cloud/live/stream/10/index.m3u8" --label "10 char-chowk-road-2-junagadh" --seconds 45'
-```
-
-> "While that tile plays, the analytics service is reading the same grid and indexing what it sees.
+> This morning they moved the grid to a new host and put it behind a login, so no participant can
+> reach it right now. And notice what the platform does about that: it says so.
 >
-> Every frame is sampled on a presentation-timestamp grid, never on arrival time. The gateway
-> replays a buffered group of pictures when you connect, so the first second arrives faster than
-> real time — and a tracker that timestamps by arrival computes impossible speeds."
+> It does not show twenty-nine connection errors and leave you to conclude the system is broken. It
+> checked the source, found a sign-in page instead of a camera list, and reported that plainly —
+> nothing here is broken, the source moved.
+>
+> Until this morning these tiles played live video from that grid. Everything indexed from it is
+> still queryable, and I will show that next."
+
+**Do not click "focus" or any tile. Move on.**
 
 ---
 
