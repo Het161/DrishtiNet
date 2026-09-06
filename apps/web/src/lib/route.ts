@@ -70,6 +70,42 @@ export interface Route {
   queryMs: number;
 }
 
+interface SignatureRow {
+  track_id: string;
+  cls: string;
+  colour: string | null;
+  colour_uncertain: boolean;
+  partial_plate: string | null;
+  embedding: number[];
+  camera_id: string;
+  label: string;
+  name: string;
+  lat: number | null;
+  lng: number | null;
+  location_status: string;
+  started_recorded_at: Date;
+  frame_count: number;
+}
+
+function toRow(r: SignatureRow): Row {
+  return {
+    trackId: r.track_id,
+    cls: r.cls,
+    colour: r.colour,
+    colourUncertain: r.colour_uncertain,
+    partialPlate: r.partial_plate,
+    embedding: r.embedding,
+    cameraId: r.camera_id,
+    cameraLabel: r.label,
+    cameraName: r.name,
+    lat: r.lat,
+    lng: r.lng,
+    positionApproximate: r.location_status !== 'verified',
+    recordedAt: r.started_recorded_at,
+    frameCount: r.frame_count,
+  };
+}
+
 interface Row {
   trackId: string;
   cls: string;
@@ -87,26 +123,32 @@ interface Row {
   frameCount: number;
 }
 
+/**
+ * The track the operator actually clicked, fetched without the quality filter.
+ *
+ * `loadSignatures` requires three frames and a full embedding, which is right for *candidates* —
+ * a one-frame track carries too little to match on. But applying it to the seed made 408 of 973
+ * signatures return 404 from a link the search results themselves offered. A page must be able to
+ * show you the thing you just clicked, even when the answer is "this one is too thin to trace".
+ */
+async function loadSeed(trackId: string): Promise<Row | null> {
+  const rows = await prisma.$queryRaw<SignatureRow[]>`
+    select s.track_id, s.cls, s.colour, s.colour_uncertain, s.partial_plate, s.embedding,
+           t.camera_id, c.label, c.name,
+           st_y(c.geom::geometry) as lat, st_x(c.geom::geometry) as lng,
+           c.location_status, t.started_recorded_at, t.frame_count
+    from vehicle_signatures s
+    join tracks t on t.id = s.track_id
+    join cameras c on c.id = t.camera_id
+    where s.track_id = ${trackId}
+    limit 1
+  `;
+  return rows.length ? toRow(rows[0]!) : null;
+}
+
 async function loadSignatures(): Promise<Row[]> {
   // Raw SQL: the camera position is PostGIS geography, which Prisma cannot express.
-  const rows = await prisma.$queryRaw<
-    {
-      track_id: string;
-      cls: string;
-      colour: string | null;
-      colour_uncertain: boolean;
-      partial_plate: string | null;
-      embedding: number[];
-      camera_id: string;
-      label: string;
-      name: string;
-      lat: number | null;
-      lng: number | null;
-      location_status: string;
-      started_recorded_at: Date;
-      frame_count: number;
-    }[]
-  >`
+  const rows = await prisma.$queryRaw<SignatureRow[]>`
     select s.track_id, s.cls, s.colour, s.colour_uncertain, s.partial_plate, s.embedding,
            t.camera_id, c.label, c.name,
            st_y(c.geom::geometry) as lat, st_x(c.geom::geometry) as lng,
@@ -118,22 +160,7 @@ async function loadSignatures(): Promise<Row[]> {
       and t.frame_count >= 3
   `;
 
-  return rows.map((r) => ({
-    trackId: r.track_id,
-    cls: r.cls,
-    colour: r.colour,
-    colourUncertain: r.colour_uncertain,
-    partialPlate: r.partial_plate,
-    embedding: r.embedding,
-    cameraId: r.camera_id,
-    cameraLabel: r.label,
-    cameraName: r.name,
-    lat: r.lat,
-    lng: r.lng,
-    positionApproximate: r.location_status !== 'verified',
-    recordedAt: r.started_recorded_at,
-    frameCount: r.frame_count,
-  }));
+  return rows.map(toRow);
 }
 
 /**
@@ -145,9 +172,7 @@ async function loadSignatures(): Promise<Row[]> {
  */
 export async function reconstructRoute(seedTrackId: string): Promise<Route | null> {
   const started = performance.now();
-  const all = await loadSignatures();
-
-  const seed = all.find((r) => r.trackId === seedTrackId);
+  const [all, seed] = await Promise.all([loadSignatures(), loadSeed(seedTrackId)]);
   if (!seed) return null;
 
   const lookalikes = all

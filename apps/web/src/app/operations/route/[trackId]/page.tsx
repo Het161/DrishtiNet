@@ -48,11 +48,22 @@ export default async function RoutePage({ params }: { params: Promise<{ trackId:
       {onlySighting ? (
         <div className="mb-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
           <p className="font-medium">Seen once, on one camera.</p>
-          <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted)]">
-            No other camera recorded a vehicle matching this one closely enough to be the same. That
-            is a finding, not a failure — most vehicles pass a single camera and are never seen
-            again.
-          </p>
+          {seed.frameCount < 3 ? (
+            // Too thin to trace, and saying which is the difference between "nothing matched" and
+            // "we did not have enough of this vehicle to look".
+            <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted)]">
+              This track lasted {seed.frameCount} frame{seed.frameCount === 1 ? '' : 's'}, which is
+              too little to match reliably against another camera. An appearance embedding from a
+              single glimpse describes the moment more than the vehicle, so it is shown rather than
+              matched — searching on it would return lookalikes, not sightings.
+            </p>
+          ) : (
+            <p className="mt-2 max-w-2xl text-sm text-[var(--color-muted)]">
+              No other camera recorded a vehicle matching this one closely enough to be the same.
+              That is a finding, not a failure — most vehicles pass a single camera and are never
+              seen again.
+            </p>
+          )}
         </div>
       ) : null}
 
