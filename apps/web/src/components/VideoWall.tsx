@@ -28,6 +28,8 @@ interface TileProps {
   camera: RegistryCamera;
   focused: boolean;
   onFocus: () => void;
+  /** False when the upstream grid is known to be unreachable — do not offer a doomed connection. */
+  gridReachable: boolean;
 }
 
 /**
@@ -80,7 +82,7 @@ async function playWhep(
   return pc;
 }
 
-function Tile({ camera, focused, onFocus }: TileProps) {
+function Tile({ camera, focused, onFocus, gridReachable }: TileProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -164,7 +166,12 @@ function Tile({ camera, focused, onFocus }: TileProps) {
 
       {!live && (
         <div className="absolute inset-0 grid place-items-center bg-[var(--color-surface)] p-3 text-center">
-          {state === 'idle' && (
+          {state === 'idle' && !gridReachable && (
+            // Offering a button that cannot work, then reporting the browser's own fetch error, is
+            // how a working system comes to look broken.
+            <span className="text-xs text-[var(--color-muted)]">upstream unavailable</span>
+          )}
+          {state === 'idle' && gridReachable && (
             <button
               type="button"
               onClick={start}
@@ -227,14 +234,22 @@ function Tile({ camera, focused, onFocus }: TileProps) {
   );
 }
 
-export function VideoWall({ cameras, maxOpen }: { cameras: RegistryCamera[]; maxOpen: number }) {
+export function VideoWall({
+  cameras,
+  maxOpen,
+  gridReachable = true,
+}: {
+  cameras: RegistryCamera[];
+  maxOpen: number;
+  gridReachable?: boolean;
+}) {
   const [focused, setFocused] = useState<string | null>(null);
   const online = cameras.filter((c) => c.status !== 'offline');
 
   return (
     <>
       <p className="mb-4 text-sm text-[var(--color-muted)]">
-        {online.length} cameras available. Tiles open on request, never automatically — each open
+        {online.length} cameras in the registry. Tiles open on request, never automatically — each open
         camera is a separate copy of the organisers&rsquo; stream, and at most{' '}
         <strong className="text-[var(--color-text)]">{maxOpen}</strong> may be pulled at once.
       </p>
@@ -252,6 +267,7 @@ export function VideoWall({ cameras, maxOpen }: { cameras: RegistryCamera[]; max
             camera={camera}
             focused={focused === camera.id}
             onFocus={() => setFocused(focused === camera.id ? null : camera.id)}
+            gridReachable={gridReachable}
           />
         ))}
       </div>

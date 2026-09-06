@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { getRegistry } from '@/lib/registry';
 import { VideoWall } from '@/components/VideoWall';
 import { NoDatabaseNotice } from '@/components/NoDatabaseNotice';
+import { gridStatus } from '@/lib/grid-status';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,9 @@ export default async function WallPage() {
   } catch {
     return <NoDatabaseNotice page="The video wall" />;
   }
+
+  // Ask the source before offering tiles that cannot possibly connect.
+  const grid = await gridStatus();
 
   return (
     <main className="mx-auto max-w-[1600px] px-6 py-6">
@@ -48,7 +52,23 @@ export default async function WallPage() {
         </nav>
       </header>
 
-      <VideoWall cameras={registry.cameras} maxOpen={MAX_OPEN} />
+      {!grid.reachable && (
+        <div className="mb-5 rounded-xl border border-[var(--color-high)] bg-[var(--color-surface)] p-5">
+          <p className="font-medium text-[var(--color-high)]">{grid.reason}</p>
+          <p className="mt-2 max-w-3xl text-sm text-[var(--color-muted)]">{grid.detail}</p>
+          <p className="mt-3 max-w-3xl text-sm text-[var(--color-muted)]">
+            Tiles are disabled rather than left to fail one by one, which would fill this page with
+            errors that look like a fault here. Everything built from this grid before it closed
+            remains queryable on{' '}
+            <Link href="/operations" className="text-[var(--color-teal)] underline underline-offset-4">
+              Operations
+            </Link>
+            .
+          </p>
+        </div>
+      )}
+
+      <VideoWall cameras={registry.cameras} maxOpen={MAX_OPEN} gridReachable={grid.reachable} />
 
       <section className="mt-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 text-sm">
         <h2 className="font-semibold">How this wall consumes the grid</h2>
